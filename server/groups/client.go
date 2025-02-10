@@ -19,6 +19,7 @@ var (
 type Query struct {
 	Page    int
 	PerPage int
+	Q       string
 }
 
 // Client interface defines the SAML operations

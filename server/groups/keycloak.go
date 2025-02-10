@@ -111,8 +111,9 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 // GetGroups retrieves all groups from Keycloak and converts them to Mattermost groups
 func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel.Group, error) {
 	params := gocloak.GetGroupsParams{
-		First: &query.Page,
-		Max:   &query.PerPage,
+		First:  &query.Page,
+		Max:    &query.PerPage,
+		Search: &query.Q,
 	}
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
 		return k.Client.GetGroups(ctx, t, k.Realm, params)

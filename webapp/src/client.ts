@@ -9,8 +9,9 @@ class APIClient {
     private readonly url = `/plugins/${manifest.id}/api/v1`;
     private readonly client4 = new Client4();
 
-    getGroups = async (page: number, perPage: number) => {
-        return this.doGet(`${this.url}/groups?page=${page}&perPage=${perPage}`);
+    getGroups = async (page: number, perPage: number, q?: string) => {
+        const searchParam = q ? `&q=${encodeURIComponent(q)}` : '';
+        return this.doGet(`${this.url}/groups?page=${page}&perPage=${perPage}${searchParam}`);
     };
 
     getGroupsCount = async () => {

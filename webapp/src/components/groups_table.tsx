@@ -1,7 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState} from 'react';
+import debounce from 'lodash/debounce';
+import React, {useState, useCallback} from 'react';
 import {Link} from 'react-router-dom';
 
 import './groups_table.scss';
@@ -23,28 +24,38 @@ const GroupsTable: React.FC = () => {
     const [groupsMap, setGroupsMap] = useState<Map<string, Group>>(new Map());
     const [totalCount, setTotalCount] = useState(0);
     const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+    const [currentPage, setCurrentPage] = useState(0);
+    const perPage = 20;
 
+    // Fetch total count only once on mount
     React.useEffect(() => {
-        const fetchGroups = async () => {
-            const response = await Client.getGroups(0, 20);
-            if (response.groups) {
-                const newGroupsMap: Map<string, Group> = new Map(
-                    response.groups.map((group: Group) => [group.remote_id, group]),
-                );
-                setGroupsMap(newGroupsMap);
-            }
-        };
-
         const fetchCount = async () => {
             const response = await Client.getGroupsCount();
             if (response.count) {
                 setTotalCount(response.count);
             }
         };
-
-        fetchGroups();
         fetchCount();
     }, []);
+
+    const debouncedSearch = useCallback(
+        debounce(async (search: string) => {
+            const response = await Client.getGroups(currentPage, perPage, search);
+            if (response.groups) {
+                const newGroupsMap: Map<string, Group> = new Map(
+                    response.groups.map((group: Group) => [group.remote_id, group]),
+                );
+                setGroupsMap(newGroupsMap);
+            }
+        }, 500),
+        [currentPage, perPage],
+    );
+
+    // Fetch groups when page changes or search term updates
+    React.useEffect(() => {
+        debouncedSearch(searchTerm);
+        return () => debouncedSearch.cancel();
+    }, [currentPage, searchTerm, debouncedSearch]);
 
     const renderButtonText = () => {
         const selectedGroupsArray = Array.from(selectedGroups);
@@ -71,7 +82,10 @@ const GroupsTable: React.FC = () => {
                         type='text'
                         placeholder='Search'
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(0); // Reset to first page on new search
+                        }}
                     />
                 </div>
                 <button
@@ -189,9 +203,19 @@ const GroupsTable: React.FC = () => {
             </table>
 
             <div className='pagination'>
-                <span>{`1 - ${Math.min(20, totalCount)} of ${totalCount}`}</span>
-                <button disabled={true}>{'&lt;'}</button>
-                <button disabled={true}>{'&gt;'}</button>
+                <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
+                <button
+                    disabled={currentPage === 0}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                >
+                    <i className='fa fa-chevron-left'/>
+                </button>
+                <button
+                    disabled={(currentPage + 1) * perPage >= totalCount}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                >
+                    <i className='fa fa-chevron-right'/>
+                </button>
             </div>
         </div>
     );
