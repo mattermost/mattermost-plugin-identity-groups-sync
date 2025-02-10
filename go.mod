@@ -2,8 +2,6 @@ module github.com/mattermost/mattermost-plugin-groups
 
 go 1.22.0
 
-toolchain go1.22.10
-
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/golang/mock v1.6.0
