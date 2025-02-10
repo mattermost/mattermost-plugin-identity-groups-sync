@@ -1,9 +1,9 @@
 {
-    "id": "com.mattermost.plugin-starter-template",
-    "name": "Plugin Starter Template",
-    "description": "This plugin serves as a starting point for writing a Mattermost plugin.",
-    "homepage_url": "https://github.com/mattermost/mattermost-plugin-starter-template",
-    "support_url": "https://github.com/mattermost/mattermost-plugin-starter-template/issues",
+    "id": "com.mattermost.plugin-groups",
+    "name": "Plugin Groups",
+    "description": "This plugin can be used to integrate with 3rd party group providers.",
+    "homepage_url": "https://github.com/mattermost/mattermost-plugin-groups",
+    "support_url": "https://github.com/mattermost/mattermost-plugin-groups/issues",
     "icon_path": "assets/starter-template-icon.svg",
     "min_server_version": "6.2.1",
     "server": {
@@ -19,8 +19,51 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "",
-        "footer": "",
-        "settings": []
+        "header": "Configure your Group integration.",
+        "footer": "To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/mattermost/mattermost-plugin-groups).",
+        "settings": [
+            {
+                "key": "GroupsProvider",
+                "display_name": "Groups Provider",
+                "type": "dropdown",
+                "help_text": "Choose your groups provider.",
+                "default": "keycloak",
+                "options": [
+                    {
+                        "display_name": "Keycloak",
+                        "value": "keycloak"
+                    }
+                ]
+            },
+            {
+                "key": "KeycloakConfig.Host",
+                "display_name": "Keycloak Host URL",
+                "type": "text",
+                "help_text": "The URL of your Keycloak server (e.g., https://keycloak.example.com).",
+                "placeholder": "Enter your Keycloak host URL"
+            },
+            {
+                "key": "KeycloakConfig.Realm",
+                "display_name": "Keycloak Realm",
+                "type": "text",
+                "help_text": "The realm name in your Keycloak server.",
+                "placeholder": "Enter your realm name"
+            },
+            {
+                "key": "KeycloakConfig.ClientID",
+                "display_name": "Client ID",
+                "type": "text",
+                "help_text": "The client ID for your application in Keycloak.",
+                "placeholder": "Enter your client ID"
+            },
+            {
+                "key": "KeycloakConfig.ClientSecret",
+                "display_name": "Client Secret",
+                "type": "text",
+                "help_text": "The client secret for your application in Keycloak.",
+                "placeholder": "Enter your client secret",
+                "secret": true
+            }
+        ]
     }
 }

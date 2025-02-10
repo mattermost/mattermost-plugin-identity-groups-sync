@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"reflect"
 
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-plugin-groups/server/groups"
+	"github.com/mattermost/mattermost-plugin-groups/server/model"
 )
 
 // configuration captures the plugin's external configuration as exposed in the Mattermost server
@@ -17,25 +21,72 @@ import (
 //
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
-type configuration struct {
+type Configuration struct {
+	GroupsProvider string                `json:"groupsprovider"`
+	KeycloakConfig model.KeycloakConfigs `json:"keycloakconfig"`
 }
 
-// Clone shallow copies the configuration. Your implementation may require a deep copy if
-// your configuration has reference types.
-func (c *configuration) Clone() *configuration {
-	var clone = *c
+func (c *Configuration) GetGroupsProvider() string {
+	if c.GroupsProvider == "" {
+		return "keycloak"
+	}
+	return c.GroupsProvider
+}
+
+func (c *Configuration) ToMap() (map[string]interface{}, error) {
+	var out map[string]interface{}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, &out)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+func (c *Configuration) SetDefaults() (bool, error) {
+	changed := false
+
+	if c.GroupsProvider == "" {
+		c.GroupsProvider = "keycloak"
+		c.KeycloakConfig = model.KeycloakConfigs{
+			Realm:        "",
+			ClientID:     "",
+			ClientSecret: "",
+			Host:         "",
+		}
+		changed = true
+	}
+
+	return changed, nil
+}
+
+// Clone creates a deep copy of the configuration.
+func (c *Configuration) Clone() *Configuration {
+	var clone = Configuration{
+		GroupsProvider: c.GroupsProvider,
+		KeycloakConfig: model.KeycloakConfigs{
+			Realm:        c.KeycloakConfig.Realm,
+			ClientID:     c.KeycloakConfig.ClientID,
+			ClientSecret: c.KeycloakConfig.ClientSecret,
+			Host:         c.KeycloakConfig.Host,
+		},
+	}
 	return &clone
 }
 
 // getConfiguration retrieves the active configuration under lock, making it safe to use
 // concurrently. The active configuration may change underneath the client of this method, but
 // the struct returned by this API call is considered immutable.
-func (p *Plugin) getConfiguration() *configuration {
+func (p *Plugin) getConfiguration() *Configuration {
 	p.configurationLock.RLock()
 	defer p.configurationLock.RUnlock()
 
 	if p.configuration == nil {
-		return &configuration{}
+		return &Configuration{}
 	}
 
 	return p.configuration
@@ -50,7 +101,7 @@ func (p *Plugin) getConfiguration() *configuration {
 // This method panics if setConfiguration is called with the existing configuration. This almost
 // certainly means that the configuration was modified without being cloned and may result in
 // an unsafe access.
-func (p *Plugin) setConfiguration(configuration *configuration) {
+func (p *Plugin) setConfiguration(configuration *Configuration) {
 	p.configurationLock.Lock()
 	defer p.configurationLock.Unlock()
 
@@ -70,7 +121,7 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
 func (p *Plugin) OnConfigurationChange() error {
-	var configuration = new(configuration)
+	var configuration = new(Configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
@@ -78,6 +129,14 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+
+	if p.groupsClient != nil {
+		groupsClient, err := groups.NewClient(p.getConfiguration().GroupsProvider, &p.getConfiguration().KeycloakConfig, p.kvstore, p.client)
+		if err != nil {
+			return errors.Wrap(err, "failed to create SAML client")
+		}
+		p.groupsClient = groupsClient
+	}
 
 	return nil
 }
