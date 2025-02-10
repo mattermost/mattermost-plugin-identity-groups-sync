@@ -64,5 +64,11 @@ func (p *Plugin) OnActivate() error {
 
 	p.kvstore = kvstore.NewKVStore(p.client)
 
+	groupsClient, err := groups.NewClient(p.getConfiguration().GroupsProvider, &p.getConfiguration().KeycloakConfig, p.kvstore, p.client)
+	if err != nil {
+		return errors.Wrap(err, "failed to create groups client")
+	}
+	p.groupsClient = groupsClient
+
 	return nil
 }
