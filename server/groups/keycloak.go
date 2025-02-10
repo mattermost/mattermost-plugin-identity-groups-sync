@@ -16,12 +16,12 @@ import (
 
 // KeycloakClient wraps the gocloak client and provides SAML-specific functionality
 type KeycloakClient struct {
-	client       *gocloak.GoCloak
-	realm        string
-	clientID     string
-	clientSecret string
-	kvstore      kvstore.KVStore
-	pluginAPI    *pluginapi.Client
+	Client       GoCloak
+	Realm        string
+	ClientID     string
+	ClientSecret string
+	Kvstore      kvstore.KVStore
+	PluginAPI    *pluginapi.Client
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
@@ -60,22 +60,22 @@ func (e *AuthError) Error() string {
 // NewKeycloakClient creates a new instance of KeycloakClient
 func NewKeycloakClient(hostURL, realm, clientID, clientSecret string, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
 	return &KeycloakClient{
-		client:       gocloak.NewClient(hostURL),
-		realm:        realm,
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		kvstore:      kvstore,
-		pluginAPI:    client,
+		Client:       gocloak.NewClient(hostURL),
+		Realm:        realm,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Kvstore:      kvstore,
+		PluginAPI:    client,
 	}
 }
 
 // Authenticate performs authentication against Keycloak server
 // Returns a JWT token string if successful
 func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
-	gocloakJWT, err := k.client.LoginClient(ctx,
-		k.clientID,
-		k.clientSecret,
-		k.realm,
+	gocloakJWT, err := k.Client.LoginClient(ctx,
+		k.ClientID,
+		k.ClientSecret,
+		k.Realm,
 	)
 	if err != nil {
 		return "", &AuthError{
@@ -98,7 +98,7 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 		RefreshTokenExpirationTime: now.Add(time.Duration(gocloakJWT.RefreshExpiresIn) * time.Second).UnixMilli(),
 	}
 
-	if err := k.kvstore.StoreJWT(jwt); err != nil {
+	if err := k.Kvstore.StoreJWT(jwt); err != nil {
 		return "", &AuthError{
 			Message: "failed to store jwt",
 			Err:     err,
@@ -115,7 +115,7 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 		Max:   &query.PerPage,
 	}
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.client.GetGroups(ctx, t, k.realm, params)
+		return k.Client.GetGroups(ctx, t, k.Realm, params)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get groups: %w", err)
@@ -133,7 +133,7 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 // GetGroupsCount retrieves the total number of groups in Keycloak
 func (k *KeycloakClient) GetGroupsCount(ctx context.Context) (int, error) {
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.client.GetGroupsCount(ctx, t, k.realm, gocloak.GetGroupsParams{})
+		return k.Client.GetGroupsCount(ctx, t, k.Realm, gocloak.GetGroupsParams{})
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to get groups count: %w", err)
@@ -145,7 +145,7 @@ func (k *KeycloakClient) GetGroupsCount(ctx context.Context) (int, error) {
 
 // getAuthToken retrieves and validates the authentication token
 func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
-	jwt, err := k.kvstore.GetJWT()
+	jwt, err := k.Kvstore.GetJWT()
 	now := time.Now().UnixMilli()
 	expirationBuffer := int64(60 * 1000) // 60 seconds in milliseconds
 
@@ -163,7 +163,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 	if now+expirationBuffer < jwt.RefreshTokenExpirationTime {
 		// Refresh the token
 		var gocloakJWT *gocloak.JWT
-		gocloakJWT, err = k.client.RefreshToken(ctx, jwt.RefreshToken, k.clientID, k.clientSecret, k.realm)
+		gocloakJWT, err = k.Client.RefreshToken(ctx, jwt.RefreshToken, k.ClientID, k.ClientSecret, k.Realm)
 		if err != nil {
 			// If refresh fails, try to authenticate again
 			return k.Authenticate(ctx)
@@ -183,7 +183,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 			RefreshTokenExpirationTime: now + (int64(gocloakJWT.RefreshExpiresIn) * 1000),
 		}
 
-		if err = k.kvstore.StoreJWT(newToken); err != nil {
+		if err = k.Kvstore.StoreJWT(newToken); err != nil {
 			return "", fmt.Errorf("failed to store refreshed token: %w", err)
 		}
 
@@ -213,7 +213,7 @@ func (k *KeycloakClient) translateGroup(group *gocloak.Group) *mmModel.Group {
 // GetGroupMembers retrieves all members of a specific group from Keycloak
 func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error) {
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.client.GetGroupMembers(ctx, t, k.realm, groupID, gocloak.GetGroupsParams{})
+		return k.Client.GetGroupMembers(ctx, t, k.Realm, groupID, gocloak.GetGroupsParams{})
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group members: %w", err)
@@ -226,7 +226,7 @@ func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([
 // GetGroup retrieves a specific group from Keycloak by ID
 func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error) {
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.client.GetGroup(ctx, t, k.realm, groupID)
+		return k.Client.GetGroup(ctx, t, k.Realm, groupID)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group: %w", err)
