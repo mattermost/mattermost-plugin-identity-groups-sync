@@ -34,6 +34,12 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleReadUserManagementGroups) {
+		http.Error(w, "Not authorized", http.StatusForbidden)
+		return
+	}
+
 	query := r.URL.Query()
 	page := 0
 	perPage := 100 // default value
@@ -94,6 +100,12 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
+		http.Error(w, "Not authorized", http.StatusForbidden)
+		return
+	}
+
 	var req struct {
 		RemoteID string `json:"remote_id"`
 	}
@@ -135,6 +147,12 @@ func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
+		http.Error(w, "Not authorized", http.StatusForbidden)
+		return
+	}
+
 	var req struct {
 		RemoteID string `json:"remote_id"`
 	}
@@ -195,6 +213,12 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) GetGroupsCount(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleReadUserManagementGroups) {
+		http.Error(w, "Not authorized", http.StatusForbidden)
+		return
+	}
+
 	count, err := p.groupsClient.GetGroupsCount(r.Context())
 	if err != nil {
 		p.API.LogError("Failed to fetch groups count", "error", err)

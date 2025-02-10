@@ -32,8 +32,22 @@ func TestGetGroups(t *testing.T) {
 	}
 	p.SetAPI(api)
 
+	t.Run("unauthorized groups fetch", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/groups", nil)
+		r.Header.Set("Mattermost-User-ID", "user1")
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleReadUserManagementGroups).Return(false).Once()
+
+		p.ServeHTTP(nil, w, r)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
 	t.Run("successful groups fetch", func(t *testing.T) {
 		remoteID := "remote1"
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleReadUserManagementGroups).Return(true).Once()
+
 		mmGroups := []*model.Group{
 			{
 				Id:          "group1",
@@ -85,10 +99,25 @@ func TestGetGroupsCount(t *testing.T) {
 
 	p := &Plugin{
 		groupsClient: mockGroupsClient,
+		client:       pluginapi.NewClient(api, nil),
 	}
 	p.SetAPI(api)
 
+	t.Run("unauthorized count fetch", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/groups/count", nil)
+		r.Header.Set("Mattermost-User-ID", "user1")
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleReadUserManagementGroups).Return(false).Once()
+
+		p.ServeHTTP(nil, w, r)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
 	t.Run("successful count fetch", func(t *testing.T) {
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleReadUserManagementGroups).Return(true).Once()
+
 		mockGroupsClient.EXPECT().
 			GetGroupsCount(gomock.Any()).
 			Return(5, nil)
@@ -126,6 +155,20 @@ func TestLinkGroup(t *testing.T) {
 	}
 	p.SetAPI(api)
 
+	t.Run("unauthorized group link", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := bytes.NewBufferString(`{"remote_id": "remote1"}`)
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/groups/link", body)
+		r.Header.Set("Mattermost-User-ID", "user1")
+		r.Header.Set("Content-Type", "application/json")
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleWriteUserManagementGroups).Return(false).Once()
+
+		p.ServeHTTP(nil, w, r)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
 	t.Run("successful group link", func(t *testing.T) {
 		remoteID := "remote1"
 		group := &model.Group{
@@ -133,6 +176,8 @@ func TestLinkGroup(t *testing.T) {
 			RemoteId:    &remoteID,
 			Source:      model.GroupSourcePluginPrefix + "keycloak",
 		}
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleWriteUserManagementGroups).Return(true).Once()
 
 		mockGroupsClient.EXPECT().
 			GetGroup(gomock.Any(), "remote1").
@@ -171,6 +216,20 @@ func TestUnlinkGroup(t *testing.T) {
 	}
 	p.SetAPI(api)
 
+	t.Run("unauthorized group unlink", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := bytes.NewBufferString(`{"remote_id": "remote1"}`)
+		r := httptest.NewRequest(http.MethodPost, "/api/v1/groups/unlink", body)
+		r.Header.Set("Mattermost-User-ID", "user1")
+		r.Header.Set("Content-Type", "application/json")
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleWriteUserManagementGroups).Return(false).Once()
+
+		p.ServeHTTP(nil, w, r)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
 	t.Run("successful group unlink", func(t *testing.T) {
 		remoteID := "remote1"
 		group := &model.Group{
@@ -179,6 +238,8 @@ func TestUnlinkGroup(t *testing.T) {
 			RemoteId:    &remoteID,
 			Source:      model.GroupSourcePluginPrefix + "keycloak",
 		}
+
+		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleWriteUserManagementGroups).Return(true).Once()
 
 		// Mock GetByRemoteID
 		api.Mock.On("GetGroupByRemoteID", "remote1", model.GroupSourcePluginPrefix+"keycloak").Return(group, nil)
