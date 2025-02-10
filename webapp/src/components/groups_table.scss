@@ -1,0 +1,153 @@
+.groups-container {
+    padding: 32px;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    
+    .header {
+        margin-bottom: 24px;
+        
+        h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: rgb(63, 67, 80);
+        }
+        
+        p {
+            color: rgb(63, 67, 80);
+            font-size: 14px;
+        }
+
+        a {
+            color: rgb(28, 88, 217);
+            text-decoration: none;
+            
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+    
+    .controls {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        
+        .search-box {
+            input {
+                padding: 10px 12px;
+                border: 1px solid rgba(63, 67, 80, 0.16);
+                border-radius: 4px;
+                width: 300px;
+                font-size: 14px;
+
+                &::placeholder {
+                    color: rgba(63, 67, 80, 0.56);
+                }
+            }
+        }
+        
+        .primary-button {
+            background: rgb(28, 88, 217);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            
+            &:hover {
+                background: rgb(22, 70, 173);
+            }
+        }
+    }
+    
+    .groups-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: rgb(63, 67, 80);
+            background: rgba(63, 67, 80, 0.04);
+            font-size: 14px;
+        }
+
+        td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(63, 67, 80, 0.08);
+            font-size: 14px;
+            color: rgb(63, 67, 80);
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .linking-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            
+            i {
+                color: #666;
+            }
+            
+            .action-link {
+                color: rgb(28, 88, 217);
+                text-decoration: none;
+                margin-left: 16px;
+                font-size: 14px;
+                
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            i {
+                margin-right: 8px;
+                color: rgba(63, 67, 80, 0.56);
+            }
+        }
+    }
+    
+    .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+        color: rgba(63, 67, 80, 0.64);
+        font-size: 14px;
+        
+        button {
+            padding: 8px 12px;
+            border: 1px solid rgba(63, 67, 80, 0.16);
+            background: white;
+            cursor: pointer;
+            color: rgb(63, 67, 80);
+            border-radius: 4px;
+            
+            &:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+
+            &:not(:disabled):hover {
+                background: rgba(63, 67, 80, 0.04);
+            }
+        }
+    }
+}
