@@ -16,5 +16,6 @@ type GoCloak interface {
 	GetGroupMembers(ctx context.Context, token string, realm string, groupID string, params gocloak.GetGroupsParams) ([]*gocloak.User, error)
 }
 
-// Ensure gocloak.GoCloak implements our interface
+// This is a compile-time check to ensure gocloak.GoCloak implements our GoCloak interface.
+// It will cause a compilation error if gocloak.GoCloak is missing any methods defined in the interface.
 var _ GoCloak = (*gocloak.GoCloak)(nil)

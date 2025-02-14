@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/mattermost/mattermost-plugin-groups/server/groups"
 	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/pkg/errors"
 )
 
@@ -28,6 +32,8 @@ type Plugin struct {
 	configuration *Configuration
 
 	groupsClient groups.Client
+
+	groupsJob *cluster.Job
 }
 
 func (p *Plugin) setDefaultConfiguration() error {
@@ -70,5 +76,32 @@ func (p *Plugin) OnActivate() error {
 	}
 	p.groupsClient = groupsClient
 
+	// Schedule group sync job to run every hour
+	job, err := cluster.Schedule(p.API, "SyncGroups", cluster.MakeWaitForInterval(1*time.Hour), func() {
+		if err = p.groupsClient.SyncGroupMap(context.Background()); err != nil {
+			p.client.Log.Error("Failed to sync groups", "error", err)
+		}
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to schedule group sync job")
+	}
+
+	p.groupsJob = job
+
 	return nil
+}
+
+// OnDeactivate is invoked when the plugin is deactivated. This is the plugin's last chance to use
+// the API, and the plugin will be terminated seconds after this call.
+func (p *Plugin) OnDeactivate() error {
+	if p.groupsJob != nil {
+		if err := p.groupsJob.Close(); err != nil {
+			p.API.LogError("Failed to close background job", "err", err)
+		}
+	}
+	return nil
+}
+
+func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, encodedXML string) error {
+	return p.groupsClient.HandleSAMLLogin(c, user, encodedXML, p.getConfiguration().KeycloakConfig.GroupsAttribute)
 }

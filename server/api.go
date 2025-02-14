@@ -56,11 +56,11 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	q := query.Get("q")
+	search := query.Get("search")
 	groupsQuery := groups.Query{
 		Page:    page,
 		PerPage: perPage,
-		Q:       q,
+		Search:  search,
 	}
 	samlGroups, err := p.groupsClient.GetGroups(r.Context(), groupsQuery)
 	if err != nil {

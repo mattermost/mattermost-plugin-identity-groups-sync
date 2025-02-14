@@ -10,13 +10,20 @@ require (
 	github.com/stretchr/testify v1.10.0
 )
 
+replace github.com/mattermost/mattermost/server/public => ../mattermost-server/server/public
+
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/beevik/etree v1.1.0 // indirect
 	github.com/go-resty/resty/v2 v2.7.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/jonboulle/clockwork v0.2.2 // indirect
+	github.com/mattermost/gosaml2 v0.8.0 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/russellhaering/goxmldsig v1.2.0 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect

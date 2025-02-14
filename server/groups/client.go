@@ -6,6 +6,7 @@ import (
 
 	"github.com/Nerzal/gocloak/v13"
 	mmModel "github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 
 	"github.com/mattermost/mattermost-plugin-groups/server/model"
@@ -19,7 +20,8 @@ var (
 type Query struct {
 	Page    int
 	PerPage int
-	Q       string
+	Search  string
+	Q       string // Additional query parameter for filtering
 }
 
 // Client interface defines the SAML operations
@@ -29,6 +31,8 @@ type Client interface {
 	GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error)
 	GetGroupsCount(ctx context.Context) (int, error)
 	GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error)
+	SyncGroupMap(ctx context.Context) error
+	HandleSAMLLogin(c *plugin.Context, user *mmModel.User, encodedXML string, groupsAttribute string) error
 }
 
 // NewClient creates a new SAML client with the given configuration

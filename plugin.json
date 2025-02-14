@@ -63,6 +63,13 @@
                 "help_text": "The client secret for your application in Keycloak.",
                 "placeholder": "Enter your client secret",
                 "secret": true
+            },
+            {
+                "key": "KeycloakConfig.GroupsAttribute",
+                "display_name": "Groups Attribute",
+                "type": "text",
+                "help_text": "The SAML assertion attribute that contains the user's groups.",
+                "placeholder": "Enter the groups attribute name"
             }
         ]
     }

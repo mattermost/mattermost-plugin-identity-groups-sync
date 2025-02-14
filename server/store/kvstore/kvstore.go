@@ -55,3 +55,78 @@ func (kv Client) StoreJWT(token *model.JWT) error {
 	}
 	return nil
 }
+
+// StoreGroupID stores a single group name to ID mapping in the KV store
+func (kv Client) StoreGroupID(groupName string, groupID string) error {
+	key := "keycloak_group_" + groupName
+	ok, err := kv.client.KV.Set(key, []byte(groupID))
+	if err != nil {
+		return errors.Wrap(err, "database error occurred when trying to save group ID")
+	} else if !ok {
+		return errors.New("Failed to save group ID")
+	}
+	return nil
+}
+
+// GetGroupID retrieves a single group ID by name from the KV store
+func (kv Client) GetGroupID(groupName string) (string, error) {
+	key := "keycloak_group_" + groupName
+	var groupID []byte
+	err := kv.client.KV.Get(key, &groupID)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get group ID")
+	}
+	if len(groupID) == 0 {
+		return "", errors.New("group not found")
+	}
+	return string(groupID), nil
+}
+
+// DeleteGroupID removes a group mapping from the KV store
+func (kv Client) DeleteGroupID(groupName string) error {
+	key := "keycloak_group_" + groupName
+	err := kv.client.KV.Delete(key)
+	if err != nil {
+		return errors.Wrap(err, "failed to delete group ID")
+	}
+	return nil
+}
+
+// ListGroupIDs retrieves all group mappings from the KV store
+func (kv Client) ListGroupIDs() (map[string]string, error) {
+	prefix := "keycloak_group_"
+	mapping := make(map[string]string)
+	page := 0
+	perPage := 100
+
+	for {
+		keys, err := kv.client.KV.ListKeys(page*perPage, perPage, pluginapi.WithPrefix(prefix))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to list group keys")
+		}
+
+		if len(keys) == 0 {
+			break // No more keys to process
+		}
+
+		for _, key := range keys {
+			var groupID []byte
+			err := kv.client.KV.Get(key, &groupID)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get group ID")
+			}
+			if len(groupID) > 0 {
+				groupName := key[len(prefix):]
+				mapping[groupName] = string(groupID)
+			}
+		}
+
+		if len(keys) < perPage {
+			break // Last page
+		}
+
+		page++
+	}
+
+	return mapping, nil
+}

@@ -17,8 +17,9 @@ type JWT struct {
 
 // KeycloakConfigs holds the configuration for Keycloak integration
 type KeycloakConfigs struct {
-	Realm        string
-	ClientID     string
-	ClientSecret string
-	Host         string
+	Realm           string
+	ClientID        string
+	ClientSecret    string
+	Host            string
+	GroupsAttribute string
 }

@@ -53,10 +53,11 @@ func (c *Configuration) SetDefaults() (bool, error) {
 	if c.GroupsProvider == "" {
 		c.GroupsProvider = "keycloak"
 		c.KeycloakConfig = model.KeycloakConfigs{
-			Realm:        "",
-			ClientID:     "",
-			ClientSecret: "",
-			Host:         "",
+			Realm:           "",
+			ClientID:        "",
+			ClientSecret:    "",
+			Host:            "",
+			GroupsAttribute: "",
 		}
 		changed = true
 	}
@@ -69,10 +70,11 @@ func (c *Configuration) Clone() *Configuration {
 	var clone = Configuration{
 		GroupsProvider: c.GroupsProvider,
 		KeycloakConfig: model.KeycloakConfigs{
-			Realm:        c.KeycloakConfig.Realm,
-			ClientID:     c.KeycloakConfig.ClientID,
-			ClientSecret: c.KeycloakConfig.ClientSecret,
-			Host:         c.KeycloakConfig.Host,
+			Realm:           c.KeycloakConfig.Realm,
+			ClientID:        c.KeycloakConfig.ClientID,
+			ClientSecret:    c.KeycloakConfig.ClientSecret,
+			Host:            c.KeycloakConfig.Host,
+			GroupsAttribute: c.KeycloakConfig.GroupsAttribute,
 		},
 	}
 	return &clone

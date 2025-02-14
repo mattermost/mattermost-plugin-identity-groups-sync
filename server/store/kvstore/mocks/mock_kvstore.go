@@ -34,6 +34,35 @@ func (m *MockKVStore) EXPECT() *MockKVStoreMockRecorder {
 	return m.recorder
 }
 
+// DeleteGroupID mocks base method.
+func (m *MockKVStore) DeleteGroupID(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteGroupID", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteGroupID indicates an expected call of DeleteGroupID.
+func (mr *MockKVStoreMockRecorder) DeleteGroupID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteGroupID", reflect.TypeOf((*MockKVStore)(nil).DeleteGroupID), arg0)
+}
+
+// GetGroupID mocks base method.
+func (m *MockKVStore) GetGroupID(arg0 string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupID", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroupID indicates an expected call of GetGroupID.
+func (mr *MockKVStoreMockRecorder) GetGroupID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupID", reflect.TypeOf((*MockKVStore)(nil).GetGroupID), arg0)
+}
+
 // GetJWT mocks base method.
 func (m *MockKVStore) GetJWT() (*model.JWT, error) {
 	m.ctrl.T.Helper()
@@ -47,6 +76,35 @@ func (m *MockKVStore) GetJWT() (*model.JWT, error) {
 func (mr *MockKVStoreMockRecorder) GetJWT() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetJWT", reflect.TypeOf((*MockKVStore)(nil).GetJWT))
+}
+
+// ListGroupIDs mocks base method.
+func (m *MockKVStore) ListGroupIDs() (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListGroupIDs")
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListGroupIDs indicates an expected call of ListGroupIDs.
+func (mr *MockKVStoreMockRecorder) ListGroupIDs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGroupIDs", reflect.TypeOf((*MockKVStore)(nil).ListGroupIDs))
+}
+
+// StoreGroupID mocks base method.
+func (m *MockKVStore) StoreGroupID(arg0, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StoreGroupID", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StoreGroupID indicates an expected call of StoreGroupID.
+func (mr *MockKVStoreMockRecorder) StoreGroupID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreGroupID", reflect.TypeOf((*MockKVStore)(nil).StoreGroupID), arg0, arg1)
 }
 
 // StoreJWT mocks base method.

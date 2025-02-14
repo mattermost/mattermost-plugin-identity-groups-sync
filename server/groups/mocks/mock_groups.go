@@ -12,6 +12,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	groups "github.com/mattermost/mattermost-plugin-groups/server/groups"
 	model "github.com/mattermost/mattermost/server/public/model"
+	plugin "github.com/mattermost/mattermost/server/public/plugin"
 )
 
 // MockClient is a mock of Client interface.
@@ -110,4 +111,32 @@ func (m *MockClient) GetGroupsCount(arg0 context.Context) (int, error) {
 func (mr *MockClientMockRecorder) GetGroupsCount(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupsCount", reflect.TypeOf((*MockClient)(nil).GetGroupsCount), arg0)
+}
+
+// HandleSAMLLogin mocks base method.
+func (m *MockClient) HandleSAMLLogin(arg0 *plugin.Context, arg1 *model.User, arg2, arg3 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleSAMLLogin", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleSAMLLogin indicates an expected call of HandleSAMLLogin.
+func (mr *MockClientMockRecorder) HandleSAMLLogin(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSAMLLogin", reflect.TypeOf((*MockClient)(nil).HandleSAMLLogin), arg0, arg1, arg2, arg3)
+}
+
+// SyncGroupMap mocks base method.
+func (m *MockClient) SyncGroupMap(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncGroupMap", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SyncGroupMap indicates an expected call of SyncGroupMap.
+func (mr *MockClientMockRecorder) SyncGroupMap(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncGroupMap", reflect.TypeOf((*MockClient)(nil).SyncGroupMap), arg0)
 }

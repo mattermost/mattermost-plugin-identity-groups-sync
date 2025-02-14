@@ -8,7 +8,9 @@ import (
 
 	"github.com/Nerzal/gocloak/v13"
 	mmModel "github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/pkg/errors"
 
 	"github.com/mattermost/mattermost-plugin-groups/server/model"
 	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
@@ -113,7 +115,8 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 	params := gocloak.GetGroupsParams{
 		First:  &query.Page,
 		Max:    &query.PerPage,
-		Search: &query.Q,
+		Search: &query.Search,
+		Q:      &query.Q,
 	}
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
 		return k.Client.GetGroups(ctx, t, k.Realm, params)
@@ -235,4 +238,145 @@ func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel
 	group := result.(*gocloak.Group)
 
 	return k.translateGroup(group), nil
+}
+
+// HandleSAMLLogin processes SAML login events and syncs group memberships
+func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, encodedXML string, groupsAttribute string) error {
+	k.PluginAPI.Log.Debug("OnSAMLLogin", "user", user, "encodedXML", encodedXML)
+	assertionInfo, err := k.PluginAPI.User.ValidateSAMLResponse(encodedXML)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate SAML response")
+	}
+
+	if groupsAttribute == "" {
+		k.PluginAPI.Log.Debug("Groups attribute not configured, skipping group sync")
+		return nil
+	}
+
+	// Collect group IDs from keycloak
+	var groupRemoteIDs []string
+
+	attributes := assertionInfo.Assertions[0].AttributeStatement.Attributes
+	for _, attr := range attributes {
+		if attr.Name == groupsAttribute {
+			// val is the group name
+			for _, val := range attr.Values {
+				if val.Value != "" {
+					keycloakGroupID, err := k.Kvstore.GetGroupID(val.Value)
+					if err != nil {
+						// If not found in KVStore, try to search for it in Keycloak
+						k.PluginAPI.Log.Debug("Group not found in KVStore, searching in Keycloak", "group", val.Value)
+
+						groupName := "name:" + val.Value
+						params := gocloak.GetGroupsParams{
+							Q: &groupName,
+						}
+						result, err := k.executeWithRetry(context.Background(), func(t string) (interface{}, error) {
+							return k.Client.GetGroups(context.Background(), t, k.Realm, params)
+						})
+						if err != nil {
+							k.PluginAPI.Log.Error("Failed to search for group in Keycloak", "group", val.Value, "error", err)
+							continue
+						}
+
+						groups := result.([]*gocloak.Group)
+						for _, group := range groups {
+							if group.Name != nil && *group.Name == val.Value {
+								// Found the group, store it in KVStore
+								if err := k.Kvstore.StoreGroupID(val.Value, *group.ID); err != nil {
+									k.PluginAPI.Log.Error("Failed to store group mapping", "group", val.Value, "error", err)
+									continue
+								}
+								keycloakGroupID = *group.ID
+								k.PluginAPI.Log.Debug("Found and stored group mapping", "name", val.Value, "id", keycloakGroupID)
+								break
+							}
+						}
+
+						if keycloakGroupID == "" {
+							k.PluginAPI.Log.Error("Group not found in Keycloak", "group", val.Value)
+							continue
+						}
+					}
+
+					// Store the group ID for later processing
+					k.PluginAPI.Log.Debug("Found group membership", "name", val.Value, "id", keycloakGroupID)
+					groupRemoteIDs = append(groupRemoteIDs, keycloakGroupID)
+				}
+			}
+
+			// Process all group memberships
+			k.PluginAPI.Log.Debug("Processing group memberships", "count", len(groupRemoteIDs))
+			// TODO: Process the group memberships using the collected Keycloak group IDs
+			return nil
+		}
+	}
+	return nil
+}
+
+func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
+	// Get existing group mappings from KV store
+	existingGroups, err := k.Kvstore.ListGroupIDs()
+	if err != nil {
+		return fmt.Errorf("failed to list existing groups: %w", err)
+	}
+
+	// Create a map to track which groups we find in Keycloak
+	foundGroups := make(map[string]bool)
+
+	page := 0
+	perPage := 100
+
+	for {
+		// Get groups page by page
+		params := gocloak.GetGroupsParams{
+			First: &page,
+			Max:   &perPage,
+		}
+		result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
+			return k.Client.GetGroups(ctx, t, k.Realm, params)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to sync groups: %w", err)
+		}
+
+		groups := result.([]*gocloak.Group)
+		if len(groups) == 0 {
+			break // No more groups to process
+		}
+
+		// Store each group mapping individually
+		for _, group := range groups {
+			if group.Name != nil && group.ID != nil {
+				foundGroups[*group.Name] = true
+
+				// Check if mapping already exists with same ID
+				if existingID, exists := existingGroups[*group.Name]; !exists || existingID != *group.ID {
+					if err := k.Kvstore.StoreGroupID(*group.Name, *group.ID); err != nil {
+						k.PluginAPI.Log.Error("Failed to store group mapping", "group", *group.Name, "error", err)
+					}
+				}
+			}
+		}
+
+		// If we got less than perPage results, we've reached the end
+		if len(groups) < perPage {
+			break
+		}
+
+		page++ // Move to next page
+	}
+
+	// Remove any groups that exist in KV store but weren't found in Keycloak
+	for groupName := range existingGroups {
+		if !foundGroups[groupName] {
+			if err := k.Kvstore.DeleteGroupID(groupName); err != nil {
+				k.PluginAPI.Log.Error("Failed to delete stale group mapping", "group", groupName, "error", err)
+			} else {
+				k.PluginAPI.Log.Debug("Deleted stale group mapping", "group", groupName)
+			}
+		}
+	}
+
+	return nil
 }
