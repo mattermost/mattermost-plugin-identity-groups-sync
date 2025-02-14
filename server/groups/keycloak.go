@@ -372,11 +372,102 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		k.PluginAPI.Log.Info("Removed user from groups",
 			"user_id", user.Id,
 			"groups", strings.Join(removedFromGroups, ", "))
+
+		// Handle team and channel removals for each group
+		for _, groupID := range removedFromGroups {
+			// Get team syncables
+			teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group teams",
+					"group_id", groupID,
+					"error", err)
+				continue
+			}
+
+			// Remove user from synced teams
+			for _, teamSyncable := range teamSyncables {
+				if teamSyncable.AutoAdd {
+					if err := k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+						k.PluginAPI.Log.Error("Failed to remove user from team",
+							"user_id", user.Id,
+							"team_id", teamSyncable.SyncableId,
+							"error", err)
+					}
+				}
+			}
+
+			// Get channel syncables
+			channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group channels",
+					"group_id", groupID,
+					"error", err)
+				continue
+			}
+
+			// Remove user from synced channels
+			for _, channelSyncable := range channelSyncables {
+				if channelSyncable.AutoAdd {
+					if err := k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
+						k.PluginAPI.Log.Error("Failed to remove user from channel",
+							"user_id", user.Id,
+							"channel_id", channelSyncable.SyncableId,
+							"error", err)
+					}
+				}
+			}
+		}
 	}
+
 	if len(addedToGroups) > 0 {
 		k.PluginAPI.Log.Info("Added user to groups",
 			"user_id", user.Id,
 			"groups", strings.Join(addedToGroups, ", "))
+
+		// Handle team and channel additions for each group
+		for _, groupID := range addedToGroups {
+			// Get team syncables
+			teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group teams",
+					"group_id", groupID,
+					"error", err)
+				continue
+			}
+
+			// Add user to synced teams
+			for _, teamSyncable := range teamSyncables {
+				if teamSyncable.AutoAdd {
+					if _, err := k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
+						k.PluginAPI.Log.Error("Failed to add user to team",
+							"user_id", user.Id,
+							"team_id", teamSyncable.SyncableId,
+							"error", err)
+					}
+				}
+			}
+
+			// Get channel syncables
+			channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group channels",
+					"group_id", groupID,
+					"error", err)
+				continue
+			}
+
+			// Add user to synced channels
+			for _, channelSyncable := range channelSyncables {
+				if channelSyncable.AutoAdd {
+					if _, err := k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
+						k.PluginAPI.Log.Error("Failed to add user to channel",
+							"user_id", user.Id,
+							"channel_id", channelSyncable.SyncableId,
+							"error", err)
+					}
+				}
+			}
+		}
 	}
 
 	return nil
