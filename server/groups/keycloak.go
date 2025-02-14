@@ -242,75 +242,143 @@ func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel
 
 // HandleSAMLLogin processes SAML login events and syncs group memberships
 func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, encodedXML string, groupsAttribute string) error {
-	k.PluginAPI.Log.Debug("OnSAMLLogin", "user", user, "encodedXML", encodedXML)
-	assertionInfo, err := k.PluginAPI.User.ValidateSAMLResponse(encodedXML)
-	if err != nil {
-		return errors.Wrap(err, "failed to validate SAML response")
-	}
-
 	if groupsAttribute == "" {
 		k.PluginAPI.Log.Debug("Groups attribute not configured, skipping group sync")
 		return nil
 	}
 
-	// Collect group IDs from keycloak
-	var groupRemoteIDs []string
+	assertionInfo, err := k.PluginAPI.User.ValidateSAMLResponse(encodedXML)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate SAML response")
+	}
 
-	attributes := assertionInfo.Assertions[0].AttributeStatement.Attributes
-	for _, attr := range attributes {
+	// Get all group values from the SAML assertion
+	var groupNames []string
+	for _, attr := range assertionInfo.Assertions[0].AttributeStatement.Attributes {
 		if attr.Name == groupsAttribute {
-			// val is the group name
 			for _, val := range attr.Values {
 				if val.Value != "" {
-					keycloakGroupID, err := k.Kvstore.GetGroupID(val.Value)
-					if err != nil {
-						// If not found in KVStore, try to search for it in Keycloak
-						k.PluginAPI.Log.Debug("Group not found in KVStore, searching in Keycloak", "group", val.Value)
-
-						groupName := "name:" + val.Value
-						params := gocloak.GetGroupsParams{
-							Q: &groupName,
-						}
-						result, err := k.executeWithRetry(context.Background(), func(t string) (interface{}, error) {
-							return k.Client.GetGroups(context.Background(), t, k.Realm, params)
-						})
-						if err != nil {
-							k.PluginAPI.Log.Error("Failed to search for group in Keycloak", "group", val.Value, "error", err)
-							continue
-						}
-
-						groups := result.([]*gocloak.Group)
-						for _, group := range groups {
-							if group.Name != nil && *group.Name == val.Value {
-								// Found the group, store it in KVStore
-								if err := k.Kvstore.StoreGroupID(val.Value, *group.ID); err != nil {
-									k.PluginAPI.Log.Error("Failed to store group mapping", "group", val.Value, "error", err)
-									continue
-								}
-								keycloakGroupID = *group.ID
-								k.PluginAPI.Log.Debug("Found and stored group mapping", "name", val.Value, "id", keycloakGroupID)
-								break
-							}
-						}
-
-						if keycloakGroupID == "" {
-							k.PluginAPI.Log.Error("Group not found in Keycloak", "group", val.Value)
-							continue
-						}
-					}
-
-					// Store the group ID for later processing
-					k.PluginAPI.Log.Debug("Found group membership", "name", val.Value, "id", keycloakGroupID)
-					groupRemoteIDs = append(groupRemoteIDs, keycloakGroupID)
+					groupNames = append(groupNames, val.Value)
 				}
 			}
-
-			// Process all group memberships
-			k.PluginAPI.Log.Debug("Processing group memberships", "count", len(groupRemoteIDs))
-			// TODO: Process the group memberships using the collected Keycloak group IDs
-			return nil
+			break // Found our attribute, no need to continue
 		}
 	}
+
+	if len(groupNames) == 0 {
+		k.PluginAPI.Log.Debug("No groups found in SAML assertion")
+		return nil
+	}
+
+	// Create a map of new group IDs
+	newGroupIDs := make(map[string]bool)
+
+	// Process all groups from SAML assertion
+	for _, groupName := range groupNames {
+		// Try to get from KVStore first
+		var keycloakGroupID string
+		keycloakGroupID, err = k.Kvstore.GetGroupID(groupName)
+		if err != nil {
+			// If not in KVStore, fetch from Keycloak
+			var result interface{}
+			result, err = k.executeWithRetry(context.Background(), func(t string) (interface{}, error) {
+				return k.Client.GetGroupByPath(context.Background(), t, k.Realm, "/"+groupName)
+			})
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
+				continue
+			}
+
+			group := result.(*gocloak.Group)
+			if group == nil || group.ID == nil {
+				k.PluginAPI.Log.Error("Group not found in Keycloak", "group", groupName)
+				continue
+			}
+
+			// Store in KVStore for future use
+			keycloakGroupID = *group.ID
+			if err = k.Kvstore.StoreGroupID(groupName, keycloakGroupID); err != nil {
+				k.PluginAPI.Log.Error("Failed to store group mapping", "group", groupName, "error", err)
+				continue
+			}
+		}
+
+		// Get corresponding Mattermost group
+		var mmGroup *mmModel.Group
+		mmGroup, err = k.PluginAPI.Group.GetByRemoteID(keycloakGroupID, mmModel.GroupSourcePluginPrefix+"keycloak")
+		if err != nil {
+			k.PluginAPI.Log.Error("Failed to get Mattermost group", "remote_id", keycloakGroupID, "error", err)
+			continue
+		}
+
+		newGroupIDs[mmGroup.Id] = true
+	}
+
+	// Get existing memberships in a single query
+	existingGroups, err := k.PluginAPI.Group.GetGroups(0, 1000, mmModel.GroupSearchOpts{
+		Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+		FilterHasMember: user.Id,
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to get user's existing groups")
+	}
+
+	// Track membership changes
+	var removedFromGroups []string
+	var addedToGroups []string
+
+	// Remove from old groups
+	for _, existingGroup := range existingGroups {
+		if !newGroupIDs[existingGroup.Id] {
+			if _, err := k.PluginAPI.Group.DeleteMember(existingGroup.Id, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from group",
+					"user_id", user.Id,
+					"group_id", existingGroup.Id,
+					"error", err)
+			} else {
+				removedFromGroups = append(removedFromGroups, existingGroup.Id)
+			}
+		}
+	}
+
+	// Add to new groups
+	existingGroupIDs := make(map[string]bool)
+	for _, group := range existingGroups {
+		existingGroupIDs[group.Id] = true
+	}
+
+	for groupID := range newGroupIDs {
+		if !existingGroupIDs[groupID] {
+			group, err := k.PluginAPI.Group.Get(groupID)
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group info",
+					"group_id", groupID,
+					"error", err)
+				continue
+			}
+
+			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to group",
+					"user_id", user.Id,
+					"group_id", groupID,
+					"error", err)
+			} else {
+				addedToGroups = append(addedToGroups, group.Id)
+			}
+		}
+	}
+
+	if len(removedFromGroups) > 0 {
+		k.PluginAPI.Log.Info("Removed user from groups",
+			"user_id", user.Id,
+			"groups", strings.Join(removedFromGroups, ", "))
+	}
+	if len(addedToGroups) > 0 {
+		k.PluginAPI.Log.Info("Added user to groups",
+			"user_id", user.Id,
+			"groups", strings.Join(addedToGroups, ", "))
+	}
+
 	return nil
 }
 

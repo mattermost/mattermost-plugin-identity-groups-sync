@@ -50,6 +50,21 @@ func (mr *MockGoCloakMockRecorder) GetGroup(arg0, arg1, arg2, arg3 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroup", reflect.TypeOf((*MockGoCloak)(nil).GetGroup), arg0, arg1, arg2, arg3)
 }
 
+// GetGroupByPath mocks base method.
+func (m *MockGoCloak) GetGroupByPath(arg0 context.Context, arg1, arg2, arg3 string) (*gocloak.Group, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupByPath", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*gocloak.Group)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetGroupByPath indicates an expected call of GetGroupByPath.
+func (mr *MockGoCloakMockRecorder) GetGroupByPath(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupByPath", reflect.TypeOf((*MockGoCloak)(nil).GetGroupByPath), arg0, arg1, arg2, arg3)
+}
+
 // GetGroupMembers mocks base method.
 func (m *MockGoCloak) GetGroupMembers(arg0 context.Context, arg1, arg2, arg3 string, arg4 gocloak.GetGroupsParams) ([]*gocloak.User, error) {
 	m.ctrl.T.Helper()
