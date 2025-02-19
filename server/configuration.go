@@ -26,13 +26,6 @@ type Configuration struct {
 	KeycloakConfig model.KeycloakConfigs `json:"keycloakconfig"`
 }
 
-func (c *Configuration) GetGroupsProvider() string {
-	if c.GroupsProvider == "" {
-		return "keycloak"
-	}
-	return c.GroupsProvider
-}
-
 func (c *Configuration) ToMap() (map[string]interface{}, error) {
 	var out map[string]interface{}
 	data, err := json.Marshal(c)
@@ -45,23 +38,6 @@ func (c *Configuration) ToMap() (map[string]interface{}, error) {
 	}
 
 	return out, nil
-}
-
-func (c *Configuration) SetDefaults() (bool, error) {
-	changed := false
-
-	if c.GroupsProvider == "" {
-		c.GroupsProvider = "keycloak"
-		c.KeycloakConfig = model.KeycloakConfigs{
-			Realm:        "",
-			ClientID:     "",
-			ClientSecret: "",
-			Host:         "",
-		}
-		changed = true
-	}
-
-	return changed, nil
 }
 
 // Clone creates a deep copy of the configuration.

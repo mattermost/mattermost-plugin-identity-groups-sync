@@ -26,6 +26,13 @@ type KeycloakClient struct {
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
 func (k *KeycloakClient) executeWithRetry(ctx context.Context, fn func(string) (interface{}, error)) (interface{}, error) {
+	if k.Client == nil || k.Realm == "" {
+		return nil, &AuthError{
+			Message: "keycloak not configured",
+			Err:     fmt.Errorf("missing required configuration: client and realm"),
+		}
+	}
+
 	token, err := k.getAuthToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth token: %w", err)
