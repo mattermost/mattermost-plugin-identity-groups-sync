@@ -129,15 +129,7 @@ const GroupsTable: React.FC = () => {
                                 // Update the map with the linked groups
                                 const newGroupsMap = new Map(groupsMap);
                                 results.forEach((linkedGroup) => {
-                                    if (linkedGroup) {
-                                        const existingGroup = newGroupsMap.get(linkedGroup.remote_id);
-                                        if (existingGroup) {
-                                            newGroupsMap.set(linkedGroup.remote_id, {
-                                                ...existingGroup,
-                                                ...linkedGroup,
-                                            });
-                                        }
-                                    }
+                                    newGroupsMap.set(linkedGroup.remote_id, linkedGroup);
                                 });
                                 setGroupsMap(newGroupsMap);
                             }
