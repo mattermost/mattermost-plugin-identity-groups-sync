@@ -29,6 +29,7 @@ type Client interface {
 	GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error)
 	GetGroupsCount(ctx context.Context) (int, error)
 	GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error)
+	GetGroupSource() mmModel.GroupSource
 }
 
 // NewClient creates a new SAML client with the given configuration

@@ -82,6 +82,20 @@ func (mr *MockClientMockRecorder) GetGroupMembers(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupMembers", reflect.TypeOf((*MockClient)(nil).GetGroupMembers), arg0, arg1)
 }
 
+// GetGroupSource mocks base method.
+func (m *MockClient) GetGroupSource() model.GroupSource {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetGroupSource")
+	ret0, _ := ret[0].(model.GroupSource)
+	return ret0
+}
+
+// GetGroupSource indicates an expected call of GetGroupSource.
+func (mr *MockClientMockRecorder) GetGroupSource() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupSource", reflect.TypeOf((*MockClient)(nil).GetGroupSource))
+}
+
 // GetGroups mocks base method.
 func (m *MockClient) GetGroups(arg0 context.Context, arg1 groups.Query) ([]*model.Group, error) {
 	m.ctrl.T.Helper()

@@ -212,7 +212,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 func (k *KeycloakClient) translateGroup(group *gocloak.Group) *mmModel.Group {
 	return &mmModel.Group{
 		DisplayName:    *group.Name,
-		Source:         mmModel.GroupSourcePluginPrefix + "keycloak",
+		Source:         k.GetGroupSource(),
 		RemoteId:       group.ID,
 		AllowReference: false,
 	}
@@ -242,4 +242,8 @@ func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel
 	group := result.(*gocloak.Group)
 
 	return k.translateGroup(group), nil
+}
+
+func (k *KeycloakClient) GetGroupSource() mmModel.GroupSource {
+	return mmModel.GroupSourcePluginPrefix + "keycloak"
 }

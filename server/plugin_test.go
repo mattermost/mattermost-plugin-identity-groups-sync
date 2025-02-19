@@ -24,7 +24,7 @@ func TestGetGroups(t *testing.T) {
 	mockGroupsClient := mocks.NewMockClient(ctrl)
 	api := &plugintest.API{}
 
-	api.Mock.On("CreateGroup", mock.Anything).Return(nil, nil)
+	api.Mock.On("CreateGroup", &model.Group{}).Return(nil, nil)
 
 	p := &Plugin{
 		groupsClient: mockGroupsClient,
@@ -65,6 +65,10 @@ func TestGetGroups(t *testing.T) {
 			}).
 			Return(mmGroups, nil)
 
+		mockGroupsClient.EXPECT().
+			GetGroupSource().
+			Return(model.GroupSourcePluginPrefix + "keycloak")
+
 		api.Mock.On("GetGroupByRemoteID", "remote1", model.GroupSourcePluginPrefix+"keycloak").Return(mmGroups[0], nil)
 
 		w := httptest.NewRecorder()
@@ -94,8 +98,8 @@ func TestGetGroupsCount(t *testing.T) {
 	api := &plugintest.API{}
 
 	// Mock required API methods
-	api.Mock.On("CreateGroup", mock.Anything).Return(&model.Group{}, nil)
-	api.Mock.On("UpdateGroup", mock.Anything).Return(&model.Group{}, nil)
+	api.Mock.On("CreateGroup", &model.Group{}).Return(&model.Group{}, nil)
+	api.Mock.On("UpdateGroup", &model.Group{}).Return(&model.Group{}, nil)
 
 	p := &Plugin{
 		groupsClient: mockGroupsClient,
@@ -147,7 +151,7 @@ func TestLinkGroup(t *testing.T) {
 	api := &plugintest.API{}
 
 	// Mock required API methods
-	api.Mock.On("CreateGroup", mock.Anything).Return(nil, nil)
+	api.Mock.On("CreateGroup", &model.Group{}).Return(nil, nil)
 
 	p := &Plugin{
 		groupsClient: mockGroupsClient,
@@ -183,9 +187,21 @@ func TestLinkGroup(t *testing.T) {
 			GetGroup(gomock.Any(), "remote1").
 			Return(group, nil)
 
+		mockGroupsClient.EXPECT().
+			GetGroupSource().
+			Return(model.GroupSourcePluginPrefix + "keycloak")
+
 		api.Mock.On("GetGroupByRemoteID", "remote1", model.GroupSourcePluginPrefix+"keycloak").Return(group, nil)
-		api.Mock.On("UpdateGroup", mock.Anything).Return(group, nil)
-		api.Mock.On("CreateGroup", mock.Anything).Return(group, nil)
+		api.Mock.On("UpdateGroup", &model.Group{
+			DisplayName: "Test Group",
+			RemoteId:    &remoteID,
+			Source:      model.GroupSourcePluginPrefix + "keycloak",
+		}).Return(group, nil)
+		api.Mock.On("CreateGroup", &model.Group{
+			DisplayName: "Test Group",
+			RemoteId:    &remoteID,
+			Source:      model.GroupSourcePluginPrefix + "keycloak",
+		}).Return(group, nil)
 		api.Mock.On("LogError", mock.Anything, mock.Anything, mock.Anything).Return()
 
 		w := httptest.NewRecorder()
@@ -208,7 +224,7 @@ func TestUnlinkGroup(t *testing.T) {
 	api := &plugintest.API{}
 
 	// Mock required API methods
-	api.Mock.On("CreateGroup", mock.Anything).Return(nil, nil)
+	api.Mock.On("CreateGroup", &model.Group{}).Return(nil, nil)
 
 	p := &Plugin{
 		groupsClient: mockGroupsClient,
@@ -240,6 +256,10 @@ func TestUnlinkGroup(t *testing.T) {
 		}
 
 		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleWriteUserManagementGroups).Return(true).Once()
+
+		mockGroupsClient.EXPECT().
+			GetGroupSource().
+			Return(model.GroupSourcePluginPrefix + "keycloak")
 
 		// Mock GetByRemoteID
 		api.Mock.On("GetGroupByRemoteID", "remote1", model.GroupSourcePluginPrefix+"keycloak").Return(group, nil)
