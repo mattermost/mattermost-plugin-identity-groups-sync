@@ -36,38 +36,9 @@ type Plugin struct {
 	groupsJob *cluster.Job
 }
 
-func (p *Plugin) setDefaultConfiguration() error {
-	config := p.getConfiguration()
-
-	changed, err := config.SetDefaults()
-	if err != nil {
-		return err
-	}
-
-	if changed {
-		configMap, err := config.ToMap()
-		if err != nil {
-			return err
-		}
-
-		err = p.client.Configuration.SavePluginConfig(configMap)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // OnActivate is invoked when the plugin is activated. If an error is returned, the plugin will be deactivated.
 func (p *Plugin) OnActivate() error {
 	p.client = pluginapi.NewClient(p.API, p.Driver)
-
-	err := p.setDefaultConfiguration()
-	if err != nil {
-		return errors.Wrap(err, "failed to set default configuration")
-	}
-
 	p.kvstore = kvstore.NewKVStore(p.client)
 
 	groupsClient, err := groups.NewClient(p.getConfiguration().GroupsProvider, &p.getConfiguration().KeycloakConfig, p.kvstore, p.client)

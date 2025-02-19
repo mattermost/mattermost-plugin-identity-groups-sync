@@ -28,6 +28,13 @@ type KeycloakClient struct {
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
 func (k *KeycloakClient) executeWithRetry(ctx context.Context, fn func(string) (interface{}, error)) (interface{}, error) {
+	if k.Client == nil || k.Realm == "" {
+		return nil, &AuthError{
+			Message: "keycloak not configured",
+			Err:     fmt.Errorf("missing required configuration: client and realm"),
+		}
+	}
+
 	token, err := k.getAuthToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth token: %w", err)
@@ -208,7 +215,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 func (k *KeycloakClient) translateGroup(group *gocloak.Group) *mmModel.Group {
 	return &mmModel.Group{
 		DisplayName:    *group.Name,
-		Source:         mmModel.GroupSourcePluginPrefix + "keycloak",
+		Source:         k.GetGroupSource(),
 		RemoteId:       group.ID,
 		AllowReference: false,
 	}
@@ -515,7 +522,6 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		}
 	}
 
-
 	if len(remainingGroups) > 0 {
 		k.PluginAPI.Log.Debug("Processing existing group memberships",
 			"user_id", user.Id,
@@ -647,4 +653,8 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (k *KeycloakClient) GetGroupSource() mmModel.GroupSource {
+	return mmModel.GroupSourcePluginPrefix + "keycloak"
 }

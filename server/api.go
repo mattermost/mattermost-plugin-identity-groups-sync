@@ -72,7 +72,7 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 	groups := []*model.Group{}
 	// Check if each group exists in Mattermost
 	for _, group := range samlGroups {
-		mmGroup, _ := p.client.Group.GetByRemoteID(*group.RemoteId, model.GroupSourcePluginPrefix+"keycloak")
+		mmGroup, _ := p.client.Group.GetByRemoteID(*group.RemoteId, p.groupsClient.GetGroupSource())
 		if mmGroup != nil {
 			group.Id = mmGroup.Id
 			group.AllowReference = mmGroup.AllowReference
@@ -121,7 +121,7 @@ func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the group from Mattermost by remote ID
-	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, model.GroupSourcePluginPrefix+"keycloak")
+	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, p.groupsClient.GetGroupSource())
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, "Group not found", http.StatusNotFound)
@@ -176,7 +176,7 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to get existing group from Mattermost
-	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, model.GroupSourcePluginPrefix+"keycloak")
+	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, p.groupsClient.GetGroupSource())
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		p.API.LogError("Failed to check existing group", "error", err)
 		http.Error(w, "Failed to check existing group", http.StatusInternalServerError)

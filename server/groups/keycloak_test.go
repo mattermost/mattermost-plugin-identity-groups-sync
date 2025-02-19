@@ -9,7 +9,6 @@ import (
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/golang/mock/gomock"
-	mmModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -151,7 +150,7 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 		assert.Len(t, groups, 1)
 		assert.Equal(t, name, groups[0].DisplayName)
 		assert.Equal(t, &id, groups[0].RemoteId)
-		assert.Equal(t, mmModel.GroupSourcePluginPrefix+"keycloak", groups[0].Source)
+		assert.Equal(t, client.GetGroupSource(), groups[0].Source)
 	})
 
 	t.Run("token refresh needed", func(t *testing.T) {
@@ -292,7 +291,7 @@ func TestKeycloakClient_GetGroup(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, name, group.DisplayName)
 		assert.Equal(t, &id, group.RemoteId)
-		assert.Equal(t, mmModel.GroupSourcePluginPrefix+"keycloak", group.Source)
+		assert.Equal(t, client.GetGroupSource(), group.Source)
 	})
 }
 
