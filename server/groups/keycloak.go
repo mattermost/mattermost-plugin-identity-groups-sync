@@ -314,20 +314,40 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		newGroupIDs[mmGroup.Id] = true
 	}
 
-	// Get existing memberships in a single query
-	existingGroups, err := k.PluginAPI.Group.GetGroups(0, 1000, mmModel.GroupSearchOpts{
-		Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
-		FilterHasMember: user.Id,
-	}, nil)
-	if err != nil {
-		return errors.Wrap(err, "failed to get user's existing groups")
+	// Get existing memberships page by page
+	var existingGroups []*mmModel.Group
+	page := 0
+	perPage := 100
+
+	for {
+		groups, err := k.PluginAPI.Group.GetGroups(page, perPage, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: user.Id,
+		}, nil)
+		if err != nil {
+			return errors.Wrap(err, "failed to get user's existing groups")
+		}
+
+		existingGroups = append(existingGroups, groups...)
+
+		// If we got less than perPage results, we've reached the end
+		if len(groups) < perPage {
+			break
+		}
+
+		page++
 	}
+
+	k.PluginAPI.Log.Debug("Retrieved existing group memberships",
+		"user_id", user.Id,
+		"total_groups", len(existingGroups))
 
 	// Track membership changes
 	var removedFromGroups []string
 	var addedToGroups []string
+	remainingGroups := make([]*mmModel.Group, 0)
 
-	// Remove from old groups
+	// Remove from old groups and track remaining groups
 	for _, existingGroup := range existingGroups {
 		if !newGroupIDs[existingGroup.Id] {
 			if _, err := k.PluginAPI.Group.DeleteMember(existingGroup.Id, user.Id); err != nil {
@@ -338,16 +358,26 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			} else {
 				removedFromGroups = append(removedFromGroups, existingGroup.Id)
 			}
+		} else {
+			remainingGroups = append(remainingGroups, existingGroup)
 		}
 	}
 
 	// Add to new groups
+	k.PluginAPI.Log.Debug("Starting new group additions",
+		"user_id", user.Id,
+		"new_group_count", len(newGroupIDs))
+
 	existingGroupIDs := make(map[string]bool)
 	for _, group := range existingGroups {
 		existingGroupIDs[group.Id] = true
 	}
 
 	for groupID := range newGroupIDs {
+		k.PluginAPI.Log.Debug("Processing group addition",
+			"user_id", user.Id,
+			"group_id", groupID,
+			"already_member", existingGroupIDs[groupID])
 		if !existingGroupIDs[groupID] {
 			group, err := k.PluginAPI.Group.Get(groupID)
 			if err != nil {
@@ -387,7 +417,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			// Remove user from synced teams
 			for _, teamSyncable := range teamSyncables {
 				if teamSyncable.AutoAdd {
-					if err := k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+					if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
 						k.PluginAPI.Log.Error("Failed to remove user from team",
 							"user_id", user.Id,
 							"team_id", teamSyncable.SyncableId,
@@ -408,7 +438,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			// Remove user from synced channels
 			for _, channelSyncable := range channelSyncables {
 				if channelSyncable.AutoAdd {
-					if err := k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
+					if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
 						k.PluginAPI.Log.Error("Failed to remove user from channel",
 							"user_id", user.Id,
 							"channel_id", channelSyncable.SyncableId,
@@ -438,7 +468,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			// Add user to synced teams
 			for _, teamSyncable := range teamSyncables {
 				if teamSyncable.AutoAdd {
-					if _, err := k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
+					if _, err = k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
 						k.PluginAPI.Log.Error("Failed to add user to team",
 							"user_id", user.Id,
 							"team_id", teamSyncable.SyncableId,
@@ -456,14 +486,93 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 				continue
 			}
 
+			k.PluginAPI.Log.Debug("Processing channel syncables",
+				"user_id", user.Id,
+				"group_id", groupID,
+				"channel_count", len(channelSyncables))
+
 			// Add user to synced channels
 			for _, channelSyncable := range channelSyncables {
+				k.PluginAPI.Log.Debug("Processing channel syncable",
+					"user_id", user.Id,
+					"group_id", groupID,
+					"channel_id", channelSyncable.SyncableId,
+					"auto_add", channelSyncable.AutoAdd)
+
 				if channelSyncable.AutoAdd {
-					if _, err := k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
+					k.PluginAPI.Log.Debug("Attempting to add user to channel",
+						"user_id", user.Id,
+						"channel_id", channelSyncable.SyncableId)
+
+					if _, err = k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
 						k.PluginAPI.Log.Error("Failed to add user to channel",
 							"user_id", user.Id,
 							"channel_id", channelSyncable.SyncableId,
 							"error", err)
+					}
+				}
+			}
+		}
+	}
+
+
+	if len(remainingGroups) > 0 {
+		k.PluginAPI.Log.Debug("Processing existing group memberships",
+			"user_id", user.Id,
+			"existing_group_count", len(remainingGroups))
+
+		for _, group := range remainingGroups {
+			if newGroupIDs[group.Id] { // Only process groups the user should still be in
+				// Get team syncables
+				teamSyncables, err := k.PluginAPI.Group.GetSyncables(group.Id, mmModel.GroupSyncableTypeTeam)
+				if err != nil {
+					k.PluginAPI.Log.Error("Failed to get group teams for existing membership",
+						"group_id", group.Id,
+						"error", err)
+					continue
+				}
+
+				// Process team syncables
+				for _, teamSyncable := range teamSyncables {
+					if teamSyncable.AutoAdd {
+						if _, err = k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
+							k.PluginAPI.Log.Error("Failed to add user to team for existing group",
+								"user_id", user.Id,
+								"team_id", teamSyncable.SyncableId,
+								"error", err)
+						}
+					}
+				}
+
+				// Get channel syncables
+				channelSyncables, err := k.PluginAPI.Group.GetSyncables(group.Id, mmModel.GroupSyncableTypeChannel)
+				if err != nil {
+					k.PluginAPI.Log.Error("Failed to get group channels for existing membership",
+						"group_id", group.Id,
+						"error", err)
+					continue
+				}
+
+				k.PluginAPI.Log.Debug("Processing channel syncables for existing group",
+					"user_id", user.Id,
+					"group_id", group.Id,
+					"channel_count", len(channelSyncables))
+
+				// Process channel syncables
+				for _, channelSyncable := range channelSyncables {
+					k.PluginAPI.Log.Debug("Processing channel syncable for existing group",
+						"user_id", user.Id,
+						"group_id", group.Id,
+						"channel_id", channelSyncable.SyncableId,
+						"auto_add", channelSyncable.AutoAdd)
+
+					if channelSyncable.AutoAdd {
+						if _, err = k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
+							k.PluginAPI.Log.Error("Failed to add user to channel for existing group",
+								"user_id", user.Id,
+								"channel_id", channelSyncable.SyncableId,
+								"error", err)
+						}
 					}
 				}
 			}
