@@ -447,18 +447,15 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		keycloakGroupID, err = k.Kvstore.GetGroupID(groupName)
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
-			validToken, err := k.Authenticate(context.Background())
-			if err != nil {
-				k.PluginAPI.Log.Error("Failed to authenticate", "error", err)
-				continue
-			}
-
-			group, err := k.Client.GetGroupByPath(context.Background(), validToken, k.Realm, "/"+groupName)
+			result, err := k.executeWithRetry(context.Background(), func(token string) (interface{}, error) {
+				return k.Client.GetGroupByPath(context.Background(), token, k.Realm, "/"+groupName)
+			})
 			if err != nil {
 				k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
 				continue
 			}
 
+			group := result.(*gocloak.Group)
 			if group == nil || group.ID == nil {
 				k.PluginAPI.Log.Error("Group not found in Keycloak", "group", groupName)
 				continue

@@ -546,28 +546,21 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			GetGroupID("newgroup").
 			Return("", errors.New("not found"))
 
-		// Mock authentication flow
-		mockGoCloak.EXPECT().
-			LoginClient(
-				gomock.Any(),
-				"test-client",
-				"test-secret",
-				"test-realm",
-			).
-			Return(&gocloak.JWT{
-				AccessToken: "test-token",
-				ExpiresIn:   300,
-			}, nil)
+		// Mock GetJWT to return a valid token
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
-			Return(nil)
+			GetJWT().
+			Return(validToken, nil)
 
 		// Mock GetGroupByPath success
 		groupID := "remote-id-1"
 		groupName := "newgroup"
 		mockGoCloak.EXPECT().
-			GetGroupByPath(gomock.Any(), "test-token", "test-realm", "/newgroup").
+			GetGroupByPath(gomock.Any(), "valid-token", "test-realm", "/newgroup").
 			Return(&gocloak.Group{
 				ID:   &groupID,
 				Name: &groupName,
@@ -636,21 +629,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			GetGroupID("newgroup").
 			Return("", errors.New("not found"))
 
-		mockGoCloak.EXPECT().
-			LoginClient(
-				gomock.Any(),
-				"test-client",
-				"test-secret",
-				"test-realm",
-			).
-			Return(&gocloak.JWT{
-				AccessToken: "test-token",
-				ExpiresIn:   300,
-			}, nil)
+		// Mock GetJWT to return a valid token
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
-			Return(nil)
+			GetJWT().
+			Return(validToken, nil)
 
 		// Mock GetGroupByPath failure
 		mockGoCloak.EXPECT().
@@ -699,21 +686,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			GetGroupID("newgroup").
 			Return("", errors.New("not found"))
 
-		mockGoCloak.EXPECT().
-			LoginClient(
-				gomock.Any(),
-				"test-client",
-				"test-secret",
-				"test-realm",
-			).
-			Return(&gocloak.JWT{
-				AccessToken: "test-token",
-				ExpiresIn:   300,
-			}, nil)
+		// Mock GetJWT to return a valid token
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
-			Return(nil)
+			GetJWT().
+			Return(validToken, nil)
 
 		// Mock GetGroupByPath success
 		groupID := "remote-id-1"
