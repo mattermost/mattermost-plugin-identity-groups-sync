@@ -582,10 +582,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
-		api.On("GetGroup", "mm-group-1").Return(&mmModel.Group{
-			Id: "mm-group-1",
-		}, nil)
-
 		// Mock group membership operations
 		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
 
@@ -774,10 +770,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			{Id: "mm-group-3", DisplayName: "Group 3"}, // Will be removed
 		}, nil)
 
-		api.On("GetGroup", "mm-group-2").Return(&mmModel.Group{
-			Id: "mm-group-2",
-		}, nil)
-
 		// Mock group membership operations
 		api.On("DeleteGroupMember", "mm-group-3", "user1").Return(nil, nil) // Remove from group3
 		api.On("UpsertGroupMember", "mm-group-2", "user1").Return(nil, nil) // Add to group2
@@ -892,13 +884,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
-		api.On("GetGroup", "mm-group-1").Return(&mmModel.Group{
-			Id: "mm-group-1",
-		}, nil)
-		api.On("GetGroup", "mm-group-2").Return(&mmModel.Group{
-			Id: "mm-group-2",
-		}, nil)
-
 		// Mock group membership operations
 		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
 		api.On("UpsertGroupMember", "mm-group-2", "user1").Return(nil, nil)
@@ -941,24 +926,18 @@ func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
 			{Id: "group2", DisplayName: "Group 2"},
 		}
 
-		newGroupIDs := map[string]bool{
-			"group2": true,
-			"group3": true,
+		newGroups := map[string]*mmModel.Group{
+			"group2": {Id: "group2", DisplayName: "Group 2"},
+			"group3": {Id: "group3", DisplayName: "Group 3"},
 		}
 
 		// Mock DeleteMember for removed group
 		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
 
-		// Mock Get for new group
-		api.On("GetGroup", "group3").Return(&mmModel.Group{
-			Id:          "group3",
-			DisplayName: "Group 3",
-		}, nil)
-
 		// Mock UpsertMember for new group
 		api.On("UpsertGroupMember", "group3", "user1").Return(nil, nil)
 
-		removed, added, remaining := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroupIDs)
+		removed, added, remaining := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroups)
 
 		assert.Contains(t, removed, "group1")
 		assert.Contains(t, added, "group3")
