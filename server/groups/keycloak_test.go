@@ -375,7 +375,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.AssertExpectations(t)
 	})
 
-	t.Run("no groups in assertion", func(t *testing.T) {
+	t.Run("cleanup existing groups when SAML has no groups", func(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
@@ -396,18 +396,470 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroups
+		// Mock GetGroups to return existing groups
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
-			Source:          "plugin_keycloak",
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
-		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+			{Id: "group2", DisplayName: "Group 2"},
+		}, nil)
 
-		// Mock all logging calls
+		// Mock group deletion
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+		api.On("DeleteGroupMember", "group2", "user1").Return(nil, nil)
+
+		// Mock team syncables
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "group1", SyncableId: "team1", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+
+		// Mock channel syncables
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "group1", SyncableId: "channel1", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+
+		// Mock logging
 		api.On("LogDebug", mock.Anything).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
 
+	t.Run("handle DeleteMember failure during cleanup", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups to return existing groups
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+		}, nil)
+
+		// Mock DeleteMember to fail
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, &mmModel.AppError{Message: "failed to delete member"})
+
+		// Mock logging
+		api.On("LogDebug", mock.Anything).Return()
+		api.On("LogError", "Failed to remove user from group", "user_id", "user1", "group_id", "group1", "error", mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Should not return error even if deletion fails
+		api.AssertExpectations(t)
+	})
+
+	t.Run("handle syncable processing failure during cleanup", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups to return existing groups
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+		}, nil)
+
+		// Mock successful group member deletion
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables to fail
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeTeam).Return(nil, &mmModel.AppError{Message: "failed to get team syncables"})
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return(nil, &mmModel.AppError{Message: "failed to get channel syncables"})
+
+		// Mock logging
+		api.On("LogDebug", mock.Anything).Return()
+		api.On("LogError", "Failed to get group teams", "group_id", "group1", "error", mock.Anything).Return()
+		api.On("LogError", "Failed to get group channels", "group_id", "group1", "error", mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Should not return error even if syncable processing fails
+		api.AssertExpectations(t)
+	})
+
+	t.Run("group exists in SAML but not in KVStore", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "newgroup"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID to return error (not found)
+		mockKVStore.EXPECT().
+			GetGroupID("newgroup").
+			Return("", errors.New("not found"))
+
+		// Mock authentication flow
+		mockGoCloak.EXPECT().
+			LoginClient(
+				gomock.Any(),
+				"test-client",
+				"test-secret",
+				"test-realm",
+			).
+			Return(&gocloak.JWT{
+				AccessToken: "test-token",
+				ExpiresIn:   300,
+			}, nil)
+
+		mockKVStore.EXPECT().
+			StoreJWT(gomock.Any()).
+			Return(nil)
+
+		// Mock GetGroupByPath success
+		groupID := "remote-id-1"
+		groupName := "newgroup"
+		mockGoCloak.EXPECT().
+			GetGroupByPath(gomock.Any(), "test-token", "test-realm", "/newgroup").
+			Return(&gocloak.Group{
+				ID:   &groupID,
+				Name: &groupName,
+			}, nil)
+
+		// Mock StoreGroupID success
+		mockKVStore.EXPECT().
+			StoreGroupID("newgroup", "remote-id-1").
+			Return(nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		api.On("GetGroup", "mm-group-1").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", "mm-group-1").Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("GetGroupByPath fails", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "newgroup"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID to return error (not found)
+		mockKVStore.EXPECT().
+			GetGroupID("newgroup").
+			Return("", errors.New("not found"))
+
+		mockGoCloak.EXPECT().
+			LoginClient(
+				gomock.Any(),
+				"test-client",
+				"test-secret",
+				"test-realm",
+			).
+			Return(&gocloak.JWT{
+				AccessToken: "test-token",
+				ExpiresIn:   300,
+			}, nil)
+
+		mockKVStore.EXPECT().
+			StoreJWT(gomock.Any()).
+			Return(nil)
+
+		// Mock GetGroupByPath failure
+		mockGoCloak.EXPECT().
+			GetGroupByPath(gomock.Any(), gomock.Any(), "test-realm", "/newgroup").
+			Return(nil, errors.New("failed to get group"))
+
+		// Mock logging
+		api.On("LogError", "Failed to get group by path", "group", "newgroup", "error", mock.Anything).Return()
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("StoreGroupID fails", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "newgroup"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID to return error (not found)
+		mockKVStore.EXPECT().
+			GetGroupID("newgroup").
+			Return("", errors.New("not found"))
+
+		mockGoCloak.EXPECT().
+			LoginClient(
+				gomock.Any(),
+				"test-client",
+				"test-secret",
+				"test-realm",
+			).
+			Return(&gocloak.JWT{
+				AccessToken: "test-token",
+				ExpiresIn:   300,
+			}, nil)
+
+		mockKVStore.EXPECT().
+			StoreJWT(gomock.Any()).
+			Return(nil)
+
+		// Mock GetGroupByPath success
+		groupID := "remote-id-1"
+		groupName := "newgroup"
+		mockGoCloak.EXPECT().
+			GetGroupByPath(gomock.Any(), gomock.Any(), "test-realm", "/newgroup").
+			Return(&gocloak.Group{
+				ID:   &groupID,
+				Name: &groupName,
+			}, nil)
+
+		// Mock StoreGroupID failure
+		mockKVStore.EXPECT().
+			StoreGroupID("newgroup", "remote-id-1").
+			Return(errors.New("failed to store"))
+
+		// Mock logging
+		api.On("LogError", "Failed to store group mapping", "group", "newgroup", "error", mock.Anything).Return()
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("mixed scenario - add, remove and remain", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with two groups
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"}, // Will remain
+									{Value: "group2"}, // Will be added
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID calls
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+		mockKVStore.EXPECT().
+			GetGroupID("group2").
+			Return("remote-id-2", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+		api.On("GetGroupByRemoteID", "remote-id-2", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-2",
+		}, nil)
+
+		// Mock GetGroups to return existing memberships (group1 and group3)
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "mm-group-1", DisplayName: "Group 1"}, // Will remain
+			{Id: "mm-group-3", DisplayName: "Group 3"}, // Will be removed
+		}, nil)
+
+		api.On("GetGroup", "mm-group-2").Return(&mmModel.Group{
+			Id: "mm-group-2",
+		}, nil)
+
+		// Mock group membership operations
+		api.On("DeleteGroupMember", "mm-group-3", "user1").Return(nil, nil) // Remove from group3
+		api.On("UpsertGroupMember", "mm-group-2", "user1").Return(nil, nil) // Add to group2
+
+		// Mock GetGroupSyncables for all groups
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", "mm-group-2").Return()
+		api.On("LogDebug", "Removed user from groups", "user_id", "user1", "groups", "mm-group-3").Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("GetGroupByRemoteID fails", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID failure
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "group not found"})
+
+		// Mock logging
+		api.On("LogError", "Failed to get Mattermost group", "remote_id", "remote-id-1", "error", mock.Anything).Return()
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
 
@@ -445,7 +897,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			Return("remote-id-2", nil).
 			Times(1)
 
-		// Mock GetByRemoteID
+		// Mock GetGroupByRemoteID
 		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
 			Id: "mm-group-1",
 		}, nil)
