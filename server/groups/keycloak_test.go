@@ -9,6 +9,11 @@ import (
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/golang/mock/gomock"
+	saml2 "github.com/mattermost/gosaml2"
+	saml2Types "github.com/mattermost/gosaml2/types"
+	mmModel "github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -340,5 +345,230 @@ func TestKeycloakClient_GetGroupMembers(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, members, 1)
 		assert.Equal(t, username, *members[0].Username)
+	})
+}
+
+func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockGoCloak := mocks.NewMockGoCloak(ctrl)
+	mockKVStore := kvMocks.NewMockKVStore(ctrl)
+	api := &plugintest.API{}
+
+	client := &groups.KeycloakClient{
+		Client:       mockGoCloak,
+		Realm:        "test-realm",
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		Kvstore:      mockKVStore,
+		PluginAPI:    pluginapi.NewClient(api, nil),
+	}
+
+	t.Run("empty groups attribute", func(t *testing.T) {
+		// Mock logging
+		api.On("LogDebug", "Groups attribute not configured, skipping group sync").Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{}, "encoded-xml", "")
+		assert.NoError(t, err)
+
+		api.AssertExpectations(t)
+	})
+
+	t.Run("no groups in assertion", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          "plugin_keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock all logging calls
+		api.On("LogDebug", mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+
+		api.AssertExpectations(t)
+	})
+
+	t.Run("groups in assertion", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+									{Value: "group2"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID calls
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil).
+			Times(1)
+		mockKVStore.EXPECT().
+			GetGroupID("group2").
+			Return("remote-id-2", nil).
+			Times(1)
+
+		// Mock GetByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+		api.On("GetGroupByRemoteID", "remote-id-2", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-2",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		api.On("GetGroup", "mm-group-1").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+		api.On("GetGroup", "mm-group-2").Return(&mmModel.Group{
+			Id: "mm-group-2",
+		}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+		api.On("UpsertGroupMember", "mm-group-2", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables and member operations
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+}
+
+func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockGoCloak := mocks.NewMockGoCloak(ctrl)
+	mockKVStore := kvMocks.NewMockKVStore(ctrl)
+	api := &plugintest.API{}
+
+	client := &groups.KeycloakClient{
+		Client:       mockGoCloak,
+		Realm:        "test-realm",
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		Kvstore:      mockKVStore,
+		PluginAPI:    pluginapi.NewClient(api, nil),
+	}
+
+	t.Run("process membership changes", func(t *testing.T) {
+		existingGroups := []*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+			{Id: "group2", DisplayName: "Group 2"},
+		}
+
+		newGroupIDs := map[string]bool{
+			"group2": true,
+			"group3": true,
+		}
+
+		// Mock DeleteMember for removed group
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+
+		// Mock Get for new group
+		api.On("GetGroup", "group3").Return(&mmModel.Group{
+			Id:          "group3",
+			DisplayName: "Group 3",
+		}, nil)
+
+		// Mock UpsertMember for new group
+		api.On("UpsertGroupMember", "group3", "user1").Return(nil, nil)
+
+		removed, added, remaining := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroupIDs)
+
+		assert.Contains(t, removed, "group1")
+		assert.Contains(t, added, "group3")
+		assert.Len(t, remaining, 1)
+		assert.Equal(t, "group2", remaining[0].Id)
+
+		api.AssertExpectations(t)
+	})
+}
+
+func TestKeycloakClient_GetExistingGroups(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockGoCloak := mocks.NewMockGoCloak(ctrl)
+	mockKVStore := kvMocks.NewMockKVStore(ctrl)
+	api := &plugintest.API{}
+
+	client := &groups.KeycloakClient{
+		Client:       mockGoCloak,
+		Realm:        "test-realm",
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		Kvstore:      mockKVStore,
+		PluginAPI:    pluginapi.NewClient(api, nil),
+	}
+
+	t.Run("get existing groups", func(t *testing.T) {
+		// Mock GetGroups to return some groups
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          "plugin_keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+			{Id: "group2", DisplayName: "Group 2"},
+		}, nil)
+
+		groups, err := client.GetExistingGroups("user1")
+		assert.NoError(t, err)
+		assert.Len(t, groups, 2)
+		assert.Equal(t, "group1", groups[0].Id)
+		assert.Equal(t, "group2", groups[1].Id)
+
+		api.AssertExpectations(t)
 	})
 }
