@@ -123,7 +123,6 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 		First:  &query.Page,
 		Max:    &query.PerPage,
 		Search: &query.Search,
-		Q:      &query.Q,
 	}
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
 		return k.Client.GetGroups(ctx, t, k.Realm, params)
@@ -439,7 +438,8 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		keycloakGroupID, err = k.Kvstore.GetGroupID(groupName)
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
-			result, err := k.executeWithRetry(context.Background(), func(token string) (interface{}, error) {
+			var result interface{}
+			result, err = k.executeWithRetry(context.Background(), func(token string) (interface{}, error) {
 				return k.Client.GetGroupByPath(context.Background(), token, k.Realm, "/"+groupName)
 			})
 			if err != nil {

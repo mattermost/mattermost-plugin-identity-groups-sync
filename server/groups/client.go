@@ -21,7 +21,6 @@ type Query struct {
 	Page    int
 	PerPage int
 	Search  string
-	Q       string // Additional query parameter for filtering
 }
 
 // Client interface defines the SAML operations

@@ -61,7 +61,6 @@ func TestGetGroups(t *testing.T) {
 			GetGroups(gomock.Any(), groups.Query{
 				Page:    0,
 				PerPage: 100,
-				Q:       "",
 			}).
 			Return(mmGroups, nil)
 
