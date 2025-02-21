@@ -5,7 +5,7 @@ go 1.22.0
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/golang/mock v1.6.0
-	github.com/mattermost/mattermost/server/public v0.1.11-0.20250210221021-82bcd11a2d39
+	github.com/mattermost/mattermost/server/public v0.1.11-0.20250221205801-36db1cb3c155
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 )
