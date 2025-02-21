@@ -107,7 +107,7 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 		RefreshTokenExpirationTime: now.Add(time.Duration(gocloakJWT.RefreshExpiresIn) * time.Second).UnixMilli(),
 	}
 
-	if err := k.Kvstore.StoreJWT(jwt); err != nil {
+	if err := k.Kvstore.StoreKeycloakJWT(jwt); err != nil {
 		return "", &AuthError{
 			Message: "failed to store jwt",
 			Err:     err,
@@ -155,7 +155,7 @@ func (k *KeycloakClient) GetGroupsCount(ctx context.Context) (int, error) {
 
 // getAuthToken retrieves and validates the authentication token
 func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
-	jwt, err := k.Kvstore.GetJWT()
+	jwt, err := k.Kvstore.GetKeycloakJWT()
 	now := time.Now().UnixMilli()
 	expirationBuffer := int64(60 * 1000) // 60 seconds in milliseconds
 
@@ -193,7 +193,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 			RefreshTokenExpirationTime: now + (int64(gocloakJWT.RefreshExpiresIn) * 1000),
 		}
 
-		if err = k.Kvstore.StoreJWT(newToken); err != nil {
+		if err = k.Kvstore.StoreKeycloakJWT(newToken); err != nil {
 			return "", fmt.Errorf("failed to store refreshed token: %w", err)
 		}
 
@@ -435,7 +435,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	// Process all groups from SAML assertion
 	for _, groupName := range groupNames {
 		var keycloakGroupID string
-		keycloakGroupID, err = k.Kvstore.GetGroupID(groupName)
+		keycloakGroupID, err = k.Kvstore.GetKeycloakGroupID(groupName)
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
 			var result interface{}
@@ -454,7 +454,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			}
 
 			keycloakGroupID = *group.ID
-			if err = k.Kvstore.StoreGroupID(groupName, keycloakGroupID); err != nil {
+			if err = k.Kvstore.StoreKeycloakGroupID(groupName, keycloakGroupID); err != nil {
 				k.PluginAPI.Log.Error("Failed to store group mapping", "group", groupName, "error", err)
 				continue
 			}
@@ -513,7 +513,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 	// Get existing group mappings from KV store
-	existingGroups, err := k.Kvstore.ListGroupIDs()
+	existingGroups, err := k.Kvstore.ListKeycloakGroupIDs()
 	if err != nil {
 		return fmt.Errorf("failed to list existing groups: %w", err)
 	}
@@ -549,7 +549,7 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 
 				// Check if mapping already exists with same ID
 				if existingID, exists := existingGroups[*group.Name]; !exists || existingID != *group.ID {
-					if err := k.Kvstore.StoreGroupID(*group.Name, *group.ID); err != nil {
+					if err := k.Kvstore.StoreKeycloakGroupID(*group.Name, *group.ID); err != nil {
 						k.PluginAPI.Log.Error("Failed to store group mapping", "group", *group.Name, "error", err)
 					}
 				}
@@ -567,7 +567,7 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 	// Remove any groups that exist in KV store but weren't found in Keycloak
 	for groupName := range existingGroups {
 		if !foundGroups[groupName] {
-			if err := k.Kvstore.DeleteGroupID(groupName); err != nil {
+			if err := k.Kvstore.DeleteKeycloakGroupID(groupName); err != nil {
 				k.PluginAPI.Log.Error("Failed to delete stale group mapping", "group", groupName, "error", err)
 			} else {
 				k.PluginAPI.Log.Debug("Deleted stale group mapping", "group", groupName)

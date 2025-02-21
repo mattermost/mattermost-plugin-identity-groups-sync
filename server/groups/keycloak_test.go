@@ -56,7 +56,7 @@ func TestKeycloakClient_Authenticate(t *testing.T) {
 			}, nil)
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
+			StoreKeycloakJWT(gomock.Any()).
 			Return(nil)
 
 		token, err := client.Authenticate(context.Background())
@@ -98,7 +98,7 @@ func TestKeycloakClient_Authenticate(t *testing.T) {
 			}, nil)
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
+			StoreKeycloakJWT(gomock.Any()).
 			Return(errors.New("store failed"))
 
 		token, err := client.Authenticate(context.Background())
@@ -131,7 +131,7 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		name := "Test Group"
@@ -167,7 +167,7 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(expiredToken, nil)
 
 		mockGoCloak.EXPECT().
@@ -186,7 +186,7 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 			}, nil)
 
 		mockKVStore.EXPECT().
-			StoreJWT(gomock.Any()).
+			StoreKeycloakJWT(gomock.Any()).
 			Return(nil)
 
 		name := "Test Group"
@@ -234,7 +234,7 @@ func TestKeycloakClient_GetGroupsCount(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		mockGoCloak.EXPECT().
@@ -275,7 +275,7 @@ func TestKeycloakClient_GetGroup(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		name := "Test Group"
@@ -323,7 +323,7 @@ func TestKeycloakClient_GetGroupMembers(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		username := "testuser"
@@ -541,9 +541,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID to return error (not found)
+		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
-			GetGroupID("newgroup").
+			GetKeycloakGroupID("newgroup").
 			Return("", errors.New("not found"))
 
 		// Mock GetJWT to return a valid token
@@ -553,7 +553,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		// Mock GetGroupByPath success
@@ -568,7 +568,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 
 		// Mock StoreGroupID success
 		mockKVStore.EXPECT().
-			StoreGroupID("newgroup", "remote-id-1").
+			StoreKeycloakGroupID("newgroup", "remote-id-1").
 			Return(nil)
 
 		// Mock GetGroupByRemoteID
@@ -620,9 +620,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID to return error (not found)
+		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
-			GetGroupID("newgroup").
+			GetKeycloakGroupID("newgroup").
 			Return("", errors.New("not found"))
 
 		// Mock GetJWT to return a valid token
@@ -632,7 +632,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		// Mock GetGroupByPath failure
@@ -677,9 +677,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID to return error (not found)
+		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
-			GetGroupID("newgroup").
+			GetKeycloakGroupID("newgroup").
 			Return("", errors.New("not found"))
 
 		// Mock GetJWT to return a valid token
@@ -689,7 +689,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}
 
 		mockKVStore.EXPECT().
-			GetJWT().
+			GetKeycloakJWT().
 			Return(validToken, nil)
 
 		// Mock GetGroupByPath success
@@ -704,7 +704,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 
 		// Mock StoreGroupID failure
 		mockKVStore.EXPECT().
-			StoreGroupID("newgroup", "remote-id-1").
+			StoreKeycloakGroupID("newgroup", "remote-id-1").
 			Return(errors.New("failed to store"))
 
 		// Mock logging
@@ -745,12 +745,12 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID calls
+		// Mock GetKeycloakGroupID calls
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 		mockKVStore.EXPECT().
-			GetGroupID("group2").
+			GetKeycloakGroupID("group2").
 			Return("remote-id-2", nil)
 
 		// Mock GetGroupByRemoteID
@@ -814,9 +814,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID failure
@@ -860,13 +860,13 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID calls
+		// Mock GetKeycloakGroupID calls
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil).
 			Times(1)
 		mockKVStore.EXPECT().
-			GetGroupID("group2").
+			GetKeycloakGroupID("group2").
 			Return("remote-id-2", nil).
 			Times(1)
 
@@ -925,9 +925,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID
@@ -1001,9 +1001,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID
@@ -1077,9 +1077,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID
@@ -1251,9 +1251,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID
@@ -1403,9 +1403,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID
@@ -1484,9 +1484,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			},
 		}, nil)
 
-		// Mock GetGroupID
+		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
-			GetGroupID("group1").
+			GetKeycloakGroupID("group1").
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID

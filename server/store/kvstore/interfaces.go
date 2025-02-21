@@ -3,10 +3,10 @@ package kvstore
 import "github.com/mattermost/mattermost-plugin-groups/server/model"
 
 type KVStore interface {
-	StoreJWT(token *model.JWT) error
-	GetJWT() (*model.JWT, error)
-	StoreGroupID(groupName string, groupID string) error
-	GetGroupID(groupName string) (string, error)
-	DeleteGroupID(groupName string) error
-	ListGroupIDs() (map[string]string, error)
+	StoreKeycloakJWT(token *model.JWT) error
+	GetKeycloakJWT() (*model.JWT, error)
+	StoreKeycloakGroupID(groupName string, groupID string) error
+	GetKeycloakGroupID(groupName string) (string, error)
+	DeleteKeycloakGroupID(groupName string) error
+	ListKeycloakGroupIDs() (map[string]string, error)
 }

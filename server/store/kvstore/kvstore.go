@@ -19,8 +19,8 @@ func NewKVStore(client *pluginapi.Client) KVStore {
 	}
 }
 
-// GetJWT retrieves the JWT token from the KV store
-func (kv Client) GetJWT() (*model.JWT, error) {
+// GetKeycloakJWT retrieves the JWT token from the KV store
+func (kv Client) GetKeycloakJWT() (*model.JWT, error) {
 	tokenBytes := []byte{}
 	err := kv.client.KV.Get("keycloak_access_token", &tokenBytes)
 	if err != nil {
@@ -40,8 +40,8 @@ func (kv Client) GetJWT() (*model.JWT, error) {
 	return token, nil
 }
 
-// StoreJWT stores the JWT token in the KV store
-func (kv Client) StoreJWT(token *model.JWT) error {
+// StoreKeycloakJWT stores the JWT token in the KV store
+func (kv Client) StoreKeycloakJWT(token *model.JWT) error {
 	tokenBytes, err := json.Marshal(token)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal token")
@@ -56,8 +56,8 @@ func (kv Client) StoreJWT(token *model.JWT) error {
 	return nil
 }
 
-// StoreGroupID stores a single group name to ID mapping in the KV store
-func (kv Client) StoreGroupID(groupName string, groupID string) error {
+// StoreKeycloakGroupID stores a single group name to ID mapping in the KV store
+func (kv Client) StoreKeycloakGroupID(groupName string, groupID string) error {
 	key := "keycloak_group_" + groupName
 	ok, err := kv.client.KV.Set(key, []byte(groupID))
 	if err != nil {
@@ -68,8 +68,8 @@ func (kv Client) StoreGroupID(groupName string, groupID string) error {
 	return nil
 }
 
-// GetGroupID retrieves a single group ID by name from the KV store
-func (kv Client) GetGroupID(groupName string) (string, error) {
+// GetKeycloakGroupID retrieves a single group ID by name from the KV store
+func (kv Client) GetKeycloakGroupID(groupName string) (string, error) {
 	key := "keycloak_group_" + groupName
 	var groupID []byte
 	err := kv.client.KV.Get(key, &groupID)
@@ -82,8 +82,8 @@ func (kv Client) GetGroupID(groupName string) (string, error) {
 	return string(groupID), nil
 }
 
-// DeleteGroupID removes a group mapping from the KV store
-func (kv Client) DeleteGroupID(groupName string) error {
+// DeleteKeycloakGroupID removes a group mapping from the KV store
+func (kv Client) DeleteKeycloakGroupID(groupName string) error {
 	key := "keycloak_group_" + groupName
 	err := kv.client.KV.Delete(key)
 	if err != nil {
@@ -92,8 +92,8 @@ func (kv Client) DeleteGroupID(groupName string) error {
 	return nil
 }
 
-// ListGroupIDs retrieves all group mappings from the KV store
-func (kv Client) ListGroupIDs() (map[string]string, error) {
+// ListKeycloakGroupIDs retrieves all group mappings from the KV store
+func (kv Client) ListKeycloakGroupIDs() (map[string]string, error) {
 	prefix := "keycloak_group_"
 	mapping := make(map[string]string)
 	page := 0
