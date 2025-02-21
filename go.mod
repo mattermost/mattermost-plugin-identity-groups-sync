@@ -5,12 +5,11 @@ go 1.22.0
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/golang/mock v1.6.0
+	github.com/mattermost/gosaml2 v0.8.0
 	github.com/mattermost/mattermost/server/public v0.1.11-0.20250221205801-36db1cb3c155
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 )
-
-replace github.com/mattermost/mattermost/server/public => ../mattermost-server/server/public
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -20,7 +19,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
-	github.com/mattermost/gosaml2 v0.8.0 // indirect
 	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/russellhaering/goxmldsig v1.2.0 // indirect
