@@ -901,6 +901,716 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
+
+	t.Run("multiple teams with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with one group
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables to return multiple teams with different AutoAdd settings
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team2",
+				AutoAdd:    false,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team3",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		// Mock team member creation only for AutoAdd=true teams
+		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
+		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables for channels (empty)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("multiple channels with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with one group
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables for teams (empty)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock GetGroupSyncables to return multiple channels with different AutoAdd settings
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel2",
+				AutoAdd:    false,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel3",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		// Mock channel member creation only for AutoAdd=true channels
+		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
+		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("mixed team and channel syncables with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with one group
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables to return mixed teams and channels with different AutoAdd settings
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team2",
+				AutoAdd:    false,
+			},
+		}, nil)
+
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel2",
+				AutoAdd:    false,
+			},
+		}, nil)
+
+		// Mock team/channel member creation only for AutoAdd=true
+		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
+		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
+
+		// Mock logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("removal from multiple teams and channels", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with empty groups (triggering removal)
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups to return existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+			{Id: "group2", DisplayName: "Group 2"},
+		}, nil)
+
+		// Mock group membership removals
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+		api.On("DeleteGroupMember", "group2", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables with multiple teams and channels
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "group1",
+				SyncableId: "team1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "group1",
+				SyncableId: "team2",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "group2",
+				SyncableId: "team3",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "group1",
+				SyncableId: "channel1",
+				AutoAdd:    true,
+			},
+			{
+				GroupId:    "group1",
+				SyncableId: "channel2",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "group2",
+				SyncableId: "channel3",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		// Mock team/channel member removals
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("DeleteTeamMember", "team2", "user1", "").Return(nil)
+		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+		api.On("DeleteChannelMember", "channel2", "user1").Return(nil)
+		api.On("DeleteChannelMember", "channel3", "user1").Return(nil)
+
+		// Mock logging
+		api.On("LogDebug", mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("partial failures in team and channel operations", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with two groups
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables with multiple teams and channels
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-group-1", SyncableId: "team1", AutoAdd: true},
+			{GroupId: "mm-group-1", SyncableId: "team2", AutoAdd: true},
+			{GroupId: "mm-group-1", SyncableId: "team3", AutoAdd: true},
+		}, nil)
+
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-group-1", SyncableId: "channel1", AutoAdd: true},
+			{GroupId: "mm-group-1", SyncableId: "channel2", AutoAdd: true},
+			{GroupId: "mm-group-1", SyncableId: "channel3", AutoAdd: true},
+		}, nil)
+
+		// Mock team member creation with mixed results
+		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)                                                  // Success
+		api.On("CreateTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to team2"}) // Failure
+		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)                                                  // Success
+
+		// Mock channel member creation with mixed results
+		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)                                                     // Success
+		api.On("AddChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to channel2"}) // Failure
+		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)                                                     // Success
+
+		// Mock error logging
+		api.On("LogError", "Failed to add user to team",
+			"user_id", "user1",
+			"team_id", "team2",
+			"error", mock.Anything).Return()
+		api.On("LogError", "Failed to add user to channel",
+			"user_id", "user1",
+			"channel_id", "channel2",
+			"error", mock.Anything).Return()
+
+		// Mock success logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite partial failures
+		api.AssertExpectations(t)
+
+		// Verify that the mock was called as expected
+		api.AssertCalled(t, "CreateTeamMember", "team1", "user1")
+		api.AssertCalled(t, "CreateTeamMember", "team2", "user1")
+		api.AssertCalled(t, "CreateTeamMember", "team3", "user1")
+		api.AssertCalled(t, "AddChannelMember", "channel1", "user1")
+		api.AssertCalled(t, "AddChannelMember", "channel2", "user1")
+		api.AssertCalled(t, "AddChannelMember", "channel3", "user1")
+	})
+
+	t.Run("partial failures in team removals", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with empty groups (triggering removal)
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups to return existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+		}, nil)
+
+		// Mock group membership removal
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables with teams
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "group1", SyncableId: "team1", AutoAdd: true},
+			{GroupId: "group1", SyncableId: "team2", AutoAdd: true},
+			{GroupId: "group1", SyncableId: "team3", AutoAdd: true},
+		}, nil)
+
+		// Mock GetGroupSyncables with channels
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock team member removal with mixed results
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)                                          // Success
+		api.On("DeleteTeamMember", "team2", "user1", "").Return(&mmModel.AppError{Message: "removal failed"}) // Failure
+		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)                                          // Success
+
+		// Mock error logging
+		api.On("LogError", "Failed to remove user from team",
+			"user_id", "user1",
+			"team_id", "team2",
+			"error", mock.Anything).Return()
+
+		// Mock success logging
+		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite partial failures
+		api.AssertExpectations(t)
+	})
+
+	t.Run("team permission scenarios", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with one group
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables with teams having different schemes
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-group-1", SyncableId: "team1", AutoAdd: true}, // Default scheme
+			{GroupId: "mm-group-1", SyncableId: "team2", AutoAdd: true}, // Custom scheme
+			{GroupId: "mm-group-1", SyncableId: "team3", AutoAdd: true}, // Restricted scheme
+		}, nil)
+
+		// Mock team member creation with different permission scenarios
+		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil) // Success with default scheme
+		api.On("CreateTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{
+			Message:       "failed to add to team2",
+			DetailedError: "User does not have required permissions in custom scheme",
+		}) // Failure due to custom scheme permissions
+		api.On("CreateTeamMember", "team3", "user1").Return(nil, &mmModel.AppError{
+			Message:       "failed to add to team3",
+			DetailedError: "User does not meet restrictions for this team",
+		}) // Failure due to team restrictions
+
+		// Mock GetGroupSyncables for channels (empty)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock error logging for permission failures
+		api.On("LogError", "Failed to add user to team",
+			"user_id", "user1",
+			"team_id", "team2",
+			"error", mock.Anything).Return()
+		api.On("LogError", "Failed to add user to team",
+			"user_id", "user1",
+			"team_id", "team3",
+			"error", mock.Anything).Return()
+
+		// Mock success logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite permission failures
+		api.AssertExpectations(t)
+	})
+
+	t.Run("channel permission scenarios", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with one group
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroupID
+		mockKVStore.EXPECT().
+			GetGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
+
+		// Mock GetGroups for existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables for teams (empty)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock GetGroupSyncables with channels having different schemes
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-group-1", SyncableId: "channel1", AutoAdd: true}, // Default scheme
+			{GroupId: "mm-group-1", SyncableId: "channel2", AutoAdd: true}, // Custom scheme
+			{GroupId: "mm-group-1", SyncableId: "channel3", AutoAdd: true}, // Private channel
+			{GroupId: "mm-group-1", SyncableId: "channel4", AutoAdd: true}, // Read-only channel
+		}, nil)
+
+		// Mock channel member creation with different permission scenarios
+		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil) // Success with default scheme
+		api.On("AddChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{
+			Message:       "failed to add to channel2",
+			DetailedError: "User does not have required permissions in custom scheme",
+		}) // Failure due to custom scheme permissions
+		api.On("AddChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{
+			Message:       "failed to add to channel3",
+			DetailedError: "User cannot join private channels",
+		}) // Failure due to private channel restrictions
+		api.On("AddChannelMember", "channel4", "user1").Return(nil, &mmModel.AppError{
+			Message:       "failed to add to channel4",
+			DetailedError: "Channel is read-only",
+		}) // Failure due to read-only restriction
+
+		// Mock error logging for permission failures
+		api.On("LogError", "Failed to add user to channel",
+			"user_id", "user1",
+			"channel_id", "channel2",
+			"error", mock.Anything).Return()
+		api.On("LogError", "Failed to add user to channel",
+			"user_id", "user1",
+			"channel_id", "channel3",
+			"error", mock.Anything).Return()
+		api.On("LogError", "Failed to add user to channel",
+			"user_id", "user1",
+			"channel_id", "channel4",
+			"error", mock.Anything).Return()
+
+		// Mock success logging
+		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite permission failures
+		api.AssertExpectations(t)
+	})
+
+	t.Run("partial failures in channel removals", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock ValidateSAMLResponse with empty groups
+		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, nil)
+
+		// Mock GetGroups to return existing memberships
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "group1", DisplayName: "Group 1"},
+		}, nil)
+
+		// Mock group membership removal
+		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables with teams (empty)
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+
+		// Mock GetGroupSyncables with channels
+		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "group1", SyncableId: "channel1", AutoAdd: true},
+			{GroupId: "group1", SyncableId: "channel2", AutoAdd: true},
+			{GroupId: "group1", SyncableId: "channel3", AutoAdd: true},
+		}, nil)
+
+		// Mock channel member removal with mixed results
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)                                          // Success
+		api.On("DeleteChannelMember", "channel2", "user1").Return(&mmModel.AppError{Message: "removal failed"}) // Failure
+		api.On("DeleteChannelMember", "channel3", "user1").Return(nil)                                          // Success
+
+		// Mock error logging
+		api.On("LogError", "Failed to remove user from channel",
+			"user_id", "user1",
+			"channel_id", "channel2",
+			"error", mock.Anything).Return()
+
+		// Mock success logging
+		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite partial failures
+		api.AssertExpectations(t)
+	})
 }
 
 func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
