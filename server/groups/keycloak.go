@@ -341,8 +341,10 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 	var addedToGroups []string
 	remainingGroups := make([]*mmModel.Group, 0)
 
-	// Process removals
+	// Create map of existing group IDs and process removals in one pass
+	existingGroupIDs := make(map[string]bool)
 	for _, existingGroup := range existingGroups {
+		existingGroupIDs[existingGroup.Id] = true
 		if _, exists := newGroups[existingGroup.Id]; !exists {
 			if _, err := k.PluginAPI.Group.DeleteMember(existingGroup.Id, user.Id); err != nil {
 				k.PluginAPI.Log.Error("Failed to remove user from group",
@@ -358,11 +360,6 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 	}
 
 	// Process additions
-	existingGroupIDs := make(map[string]bool)
-	for _, group := range existingGroups {
-		existingGroupIDs[group.Id] = true
-	}
-
 	for groupID, group := range newGroups {
 		if !existingGroupIDs[groupID] {
 			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
