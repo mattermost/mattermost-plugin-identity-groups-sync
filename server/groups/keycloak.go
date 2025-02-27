@@ -246,8 +246,8 @@ func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel
 	return k.translateGroup(group), nil
 }
 
-// processTeamSyncables handles adding or removing a user from teams for a group
-func (k *KeycloakClient) processTeamSyncables(groupID string, user *mmModel.User, isRemoval bool) {
+// addUserToTeams adds a user to all teams associated with a group
+func (k *KeycloakClient) addUserToTeams(groupID string, user *mmModel.User) {
 	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
 	if err != nil {
 		k.PluginAPI.Log.Error("Failed to get group teams",
@@ -258,27 +258,40 @@ func (k *KeycloakClient) processTeamSyncables(groupID string, user *mmModel.User
 
 	for _, teamSyncable := range teamSyncables {
 		if teamSyncable.AutoAdd {
-			if isRemoval {
-				if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
-					k.PluginAPI.Log.Error("Failed to remove user from team",
-						"user_id", user.Id,
-						"team_id", teamSyncable.SyncableId,
-						"error", err)
-				}
-			} else {
-				if _, err = k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to add user to team",
-						"user_id", user.Id,
-						"team_id", teamSyncable.SyncableId,
-						"error", err)
-				}
+			if _, err = k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to team",
+					"user_id", user.Id,
+					"team_id", teamSyncable.SyncableId,
+					"error", err)
 			}
 		}
 	}
 }
 
-// processChannelSyncables handles adding or removing a user from channels for a group
-func (k *KeycloakClient) processChannelSyncables(groupID string, user *mmModel.User, isRemoval bool) {
+// removeUserFromTeams removes a user from all teams associated with a group
+func (k *KeycloakClient) removeUserFromTeams(groupID string, user *mmModel.User) {
+	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group teams",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, teamSyncable := range teamSyncables {
+		if teamSyncable.AutoAdd {
+			if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from team",
+					"user_id", user.Id,
+					"team_id", teamSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// addUserToChannels adds a user to all channels associated with a group
+func (k *KeycloakClient) addUserToChannels(groupID string, user *mmModel.User) {
 	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
 	if err != nil {
 		k.PluginAPI.Log.Error("Failed to get group channels",
@@ -289,20 +302,33 @@ func (k *KeycloakClient) processChannelSyncables(groupID string, user *mmModel.U
 
 	for _, channelSyncable := range channelSyncables {
 		if channelSyncable.AutoAdd {
-			if isRemoval {
-				if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to remove user from channel",
-						"user_id", user.Id,
-						"channel_id", channelSyncable.SyncableId,
-						"error", err)
-				}
-			} else {
-				if _, err = k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to add user to channel",
-						"user_id", user.Id,
-						"channel_id", channelSyncable.SyncableId,
-						"error", err)
-				}
+			if _, err = k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to channel",
+					"user_id", user.Id,
+					"channel_id", channelSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// removeUserFromChannels removes a user from all channels associated with a group
+func (k *KeycloakClient) removeUserFromChannels(groupID string, user *mmModel.User) {
+	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group channels",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, channelSyncable := range channelSyncables {
+		if channelSyncable.AutoAdd {
+			if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from channel",
+					"user_id", user.Id,
+					"channel_id", channelSyncable.SyncableId,
+					"error", err)
 			}
 		}
 	}
@@ -336,10 +362,9 @@ func (k *KeycloakClient) GetExistingGroups(userID string) ([]*mmModel.Group, err
 }
 
 // ProcessMembershipChanges handles the addition and removal of group memberships
-func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroups []*mmModel.Group, newGroups map[string]*mmModel.Group) ([]string, []string, []*mmModel.Group) {
+func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroups []*mmModel.Group, newGroups map[string]*mmModel.Group) ([]string, []string) {
 	var removedFromGroups []string
-	var addedToGroups []string
-	remainingGroups := make([]*mmModel.Group, 0)
+	activeGroups := make([]string, 0)
 
 	// Create map of existing group IDs and process removals in one pass
 	existingGroupIDs := make(map[string]bool)
@@ -355,12 +380,12 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 				removedFromGroups = append(removedFromGroups, existingGroup.Id)
 			}
 		} else {
-			remainingGroups = append(remainingGroups, existingGroup)
+			activeGroups = append(activeGroups, existingGroup.Id)
 		}
 	}
 
 	// Process additions
-	for groupID, group := range newGroups {
+	for groupID := range newGroups {
 		if !existingGroupIDs[groupID] {
 			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
 				k.PluginAPI.Log.Error("Failed to add user to group",
@@ -368,12 +393,13 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 					"group_id", groupID,
 					"error", err)
 			} else {
-				addedToGroups = append(addedToGroups, group.Id)
+				// Add the newly added group to activeGroups
+				activeGroups = append(activeGroups, groupID)
 			}
 		}
 	}
 
-	return removedFromGroups, addedToGroups, remainingGroups
+	return removedFromGroups, activeGroups
 }
 
 // HandleSAMLLogin processes SAML login events and syncs group memberships
@@ -419,8 +445,8 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 						"error", err)
 					continue
 				}
-				k.processTeamSyncables(group.Id, user, true)
-				k.processChannelSyncables(group.Id, user, true)
+				k.removeUserFromTeams(group.Id, user)
+				k.removeUserFromChannels(group.Id, user)
 			}
 		}
 		return nil
@@ -472,36 +498,20 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		return err
 	}
 
-	removedFromGroups, addedToGroups, remainingGroups := k.ProcessMembershipChanges(user, existingGroups, newGroups)
+	removedFromGroups, activeGroups := k.ProcessMembershipChanges(user, existingGroups, newGroups)
 
 	if len(removedFromGroups) > 0 {
-		k.PluginAPI.Log.Debug("Removed user from groups",
-			"user_id", user.Id,
-			"groups", strings.Join(removedFromGroups, ", "))
-
 		for _, groupID := range removedFromGroups {
-			k.processTeamSyncables(groupID, user, true)
-			k.processChannelSyncables(groupID, user, true)
+			k.removeUserFromTeams(groupID, user)
+			k.removeUserFromChannels(groupID, user)
 		}
 	}
 
-	if len(addedToGroups) > 0 {
-		k.PluginAPI.Log.Debug("Added user to groups",
-			"user_id", user.Id,
-			"groups", strings.Join(addedToGroups, ", "))
-
-		for _, groupID := range addedToGroups {
-			k.processTeamSyncables(groupID, user, false)
-			k.processChannelSyncables(groupID, user, false)
-		}
-	}
-
-	if len(remainingGroups) > 0 {
-		for _, group := range remainingGroups {
-			if _, exists := newGroups[group.Id]; exists {
-				k.processTeamSyncables(group.Id, user, false)
-				k.processChannelSyncables(group.Id, user, false)
-			}
+	// Process all active groups (both remaining and newly added)
+	if len(activeGroups) > 0 {
+		for _, groupID := range activeGroups {
+			k.addUserToTeams(groupID, user)
+			k.addUserToChannels(groupID, user)
 		}
 	}
 

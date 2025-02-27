@@ -9,6 +9,10 @@ import (
 	"github.com/mattermost/mattermost-plugin-groups/server/model"
 )
 
+const (
+	keycloakGroupPrefix = "keycloak_group_"
+)
+
 type Client struct {
 	client *pluginapi.Client
 }
@@ -58,7 +62,7 @@ func (kv Client) StoreKeycloakJWT(token *model.JWT) error {
 
 // StoreKeycloakGroupID stores a single group name to ID mapping in the KV store
 func (kv Client) StoreKeycloakGroupID(groupName string, groupID string) error {
-	key := "keycloak_group_" + groupName
+	key := keycloakGroupPrefix + groupName
 	ok, err := kv.client.KV.Set(key, []byte(groupID))
 	if err != nil {
 		return errors.Wrap(err, "database error occurred when trying to save group ID")
@@ -70,7 +74,7 @@ func (kv Client) StoreKeycloakGroupID(groupName string, groupID string) error {
 
 // GetKeycloakGroupID retrieves a single group ID by name from the KV store
 func (kv Client) GetKeycloakGroupID(groupName string) (string, error) {
-	key := "keycloak_group_" + groupName
+	key := keycloakGroupPrefix + groupName
 	var groupID []byte
 	err := kv.client.KV.Get(key, &groupID)
 	if err != nil {
@@ -84,7 +88,7 @@ func (kv Client) GetKeycloakGroupID(groupName string) (string, error) {
 
 // DeleteKeycloakGroupID removes a group mapping from the KV store
 func (kv Client) DeleteKeycloakGroupID(groupName string) error {
-	key := "keycloak_group_" + groupName
+	key := keycloakGroupPrefix + groupName
 	err := kv.client.KV.Delete(key)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete group ID")
@@ -94,7 +98,7 @@ func (kv Client) DeleteKeycloakGroupID(groupName string) error {
 
 // ListKeycloakGroupIDs retrieves all group mappings from the KV store
 func (kv Client) ListKeycloakGroupIDs() (map[string]string, error) {
-	prefix := "keycloak_group_"
+	prefix := keycloakGroupPrefix
 	mapping := make(map[string]string)
 	page := 0
 	perPage := 100
@@ -116,7 +120,7 @@ func (kv Client) ListKeycloakGroupIDs() (map[string]string, error) {
 				return nil, errors.Wrap(err, "failed to get group ID")
 			}
 			if len(groupID) > 0 {
-				groupName := key[len(prefix):]
+				groupName := key[len(keycloakGroupPrefix):]
 				mapping[groupName] = string(groupID)
 			}
 		}

@@ -589,9 +589,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", "mm-group-1").Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
@@ -782,10 +779,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", "mm-group-2").Return()
-		api.On("LogDebug", "Removed user from groups", "user_id", "user1", "groups", "mm-group-3").Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
@@ -894,9 +887,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
@@ -970,9 +960,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock GetGroupSyncables for channels (empty)
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
@@ -1045,9 +1032,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock channel member creation only for AutoAdd=true channels
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
-
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
@@ -1126,9 +1110,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock team/channel member creation only for AutoAdd=true
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
-
-		// Mock logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err)
@@ -1303,9 +1284,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"channel_id", "channel2",
 			"error", mock.Anything).Return()
 
-		// Mock success logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite partial failures
 		api.AssertExpectations(t)
@@ -1453,9 +1431,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"team_id", "team3",
 			"error", mock.Anything).Return()
 
-		// Mock success logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
-
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite permission failures
 		api.AssertExpectations(t)
@@ -1542,9 +1517,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"user_id", "user1",
 			"channel_id", "channel4",
 			"error", mock.Anything).Return()
-
-		// Mock success logging
-		api.On("LogDebug", "Added user to groups", "user_id", "user1", "groups", mock.AnythingOfType("string")).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite permission failures
@@ -1647,12 +1619,10 @@ func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
 		// Mock UpsertMember for new group
 		api.On("UpsertGroupMember", "group3", "user1").Return(nil, nil)
 
-		removed, added, remaining := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroups)
+		removed, active := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroups)
 
 		assert.Contains(t, removed, "group1")
-		assert.Contains(t, added, "group3")
-		assert.Len(t, remaining, 1)
-		assert.Equal(t, "group2", remaining[0].Id)
+		assert.Len(t, active, 2)
 
 		api.AssertExpectations(t)
 	})
