@@ -64,6 +64,16 @@
             &:hover {
                 background: rgb(22, 70, 173);
             }
+            
+            &:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+                background: rgb(28, 88, 217);
+                
+                &:hover {
+                    background: rgb(28, 88, 217);
+                }
+            }
         }
     }
     
@@ -71,6 +81,27 @@
         width: 100%;
         border-collapse: collapse;
         margin: 16px 0;
+        
+        .loading-container {
+            text-align: center;
+            padding: 40px 0;
+            
+            .loading-spinner {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
+                color: rgba(63, 67, 80, 0.6);
+                
+                i {
+                    color: rgb(28, 88, 217);
+                }
+                
+                span {
+                    font-size: 14px;
+                }
+            }
+        }
         
         th {
             padding: 12px 16px;
