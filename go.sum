@@ -126,8 +126,6 @@ github.com/mattermost/ldap v0.0.0-20231116144001-0f480c025956 h1:Y1Tu/swM31pVwwb
 github.com/mattermost/ldap v0.0.0-20231116144001-0f480c025956/go.mod h1:SRl30Lb7/QoYyohYeVBuqYvvmXSZJxZgiV3Zf6VbxjI=
 github.com/mattermost/logr/v2 v2.0.21 h1:CMHsP+nrbRlEC4g7BwOk1GAnMtHkniFhlSQPXy52be4=
 github.com/mattermost/logr/v2 v2.0.21/go.mod h1:kZkB/zqKL9e+RY5gB3vGpsyenC+TpuiOenjMkvJJbzc=
-github.com/mattermost/mattermost/server/public v0.1.11-0.20250221205801-36db1cb3c155 h1:rXgl4yceCy2JjJEdl5me6HdI1ZjXrZP+ic9MisoF0TE=
-github.com/mattermost/mattermost/server/public v0.1.11-0.20250221205801-36db1cb3c155/go.mod h1:hu2sIyXm024PGIGhACqmCxvp3atrwRzXGgAzCvs6zJs=
 github.com/mattermost/mattermost/server/public v0.1.11-0.20250311202423-5e86f4edd304 h1:pYhdDG6SX2/KRfFRd/4GfM2+GXfnkEggLHLHpvHQL9o=
 github.com/mattermost/mattermost/server/public v0.1.11-0.20250311202423-5e86f4edd304/go.mod h1:dHN9zBNP5/PxtnpwOeMaQfuSp6S4Tedja674xRI1Ry4=
 github.com/mattermost/xml-roundtrip-validator v0.1.0 h1:RXbVD2UAl7A7nOTR4u7E3ILa4IbtvKBHw64LDsmu9hU=
