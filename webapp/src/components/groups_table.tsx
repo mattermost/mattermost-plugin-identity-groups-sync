@@ -43,7 +43,6 @@ const GroupsTable: React.FC = () => {
 
     const debouncedSearch = useCallback(
         debounce(async (search: string) => {
-            setSearchTerm(search);
             setCurrentPage(0);
             await fetchGroups(0, search);
         }, 500),
@@ -100,7 +99,10 @@ const GroupsTable: React.FC = () => {
                         type='text'
                         placeholder='Search'
                         value={searchTerm}
-                        onChange={(e) => debouncedSearch(e.target.value)}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            debouncedSearch(e.target.value);
+                        }}
                     />
                 </div>
                 <button
