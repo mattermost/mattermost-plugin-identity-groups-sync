@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Nerzal/gocloak/v13"
+	saml2 "github.com/mattermost/gosaml2"
 	mmModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
@@ -403,15 +404,10 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 }
 
 // HandleSAMLLogin processes SAML login events and syncs group memberships
-func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, encodedXML string, groupsAttribute string) error {
+func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, assertionInfo *saml2.AssertionInfo, groupsAttribute string) error {
 	if groupsAttribute == "" {
 		k.PluginAPI.Log.Debug("Groups attribute not configured, skipping group sync")
 		return nil
-	}
-
-	assertionInfo, err := k.PluginAPI.User.ValidateSAMLResponse(encodedXML)
-	if err != nil {
-		return errors.Wrap(err, "failed to validate SAML response")
 	}
 
 	// Get all group values from the SAML assertion
@@ -431,7 +427,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		k.PluginAPI.Log.Debug("No groups found in SAML assertion")
 		var existingGroups []*mmModel.Group
 		// Even with no new groups, we need to clean up existing memberships
-		existingGroups, err = k.GetExistingGroups(user.Id)
+		existingGroups, err := k.GetExistingGroups(user.Id)
 		if err != nil {
 			return err
 		}
@@ -458,7 +454,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	// Process all groups from SAML assertion
 	for _, groupName := range groupNames {
 		var keycloakGroupID string
-		keycloakGroupID, err = k.Kvstore.GetKeycloakGroupID(groupName)
+		keycloakGroupID, err := k.Kvstore.GetKeycloakGroupID(groupName)
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
 			var result interface{}

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	saml2 "github.com/mattermost/gosaml2"
 	"github.com/mattermost/mattermost-plugin-groups/server/groups"
 	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
 	"github.com/mattermost/mattermost/server/public/model"
@@ -73,6 +74,6 @@ func (p *Plugin) OnDeactivate() error {
 	return nil
 }
 
-func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, encodedXML string) error {
-	return p.groupsClient.HandleSAMLLogin(c, user, encodedXML, p.getConfiguration().KeycloakConfig.GroupsAttribute)
+func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *saml2.AssertionInfo) error {
+	return p.groupsClient.HandleSAMLLogin(c, user, assertion, p.getConfiguration().KeycloakConfig.GroupsAttribute)
 }

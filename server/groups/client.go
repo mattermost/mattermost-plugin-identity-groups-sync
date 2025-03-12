@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/Nerzal/gocloak/v13"
+	saml2 "github.com/mattermost/gosaml2"
 	mmModel "github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
@@ -31,7 +32,7 @@ type Client interface {
 	GetGroupsCount(ctx context.Context) (int, error)
 	GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error)
 	SyncGroupMap(ctx context.Context) error
-	HandleSAMLLogin(c *plugin.Context, user *mmModel.User, encodedXML string, groupsAttribute string) error
+	HandleSAMLLogin(c *plugin.Context, user *mmModel.User, assertion *saml2.AssertionInfo, groupsAttribute string) error
 	GetGroupSource() mmModel.GroupSource
 }
 

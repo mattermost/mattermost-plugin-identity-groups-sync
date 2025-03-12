@@ -10,6 +10,7 @@ import (
 
 	gocloak "github.com/Nerzal/gocloak/v13"
 	gomock "github.com/golang/mock/gomock"
+	saml2 "github.com/mattermost/gosaml2"
 	groups "github.com/mattermost/mattermost-plugin-groups/server/groups"
 	model "github.com/mattermost/mattermost/server/public/model"
 	plugin "github.com/mattermost/mattermost/server/public/plugin"
@@ -128,7 +129,7 @@ func (mr *MockClientMockRecorder) GetGroupsCount(arg0 interface{}) *gomock.Call 
 }
 
 // HandleSAMLLogin mocks base method.
-func (m *MockClient) HandleSAMLLogin(arg0 *plugin.Context, arg1 *model.User, arg2, arg3 string) error {
+func (m *MockClient) HandleSAMLLogin(arg0 *plugin.Context, arg1 *model.User, arg2 *saml2.AssertionInfo, arg3 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleSAMLLogin", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)

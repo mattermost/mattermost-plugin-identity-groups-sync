@@ -369,7 +369,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock logging
 		api.On("LogDebug", "Groups attribute not configured, skipping group sync").Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{}, "encoded-xml", "")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{}, nil, "")
 		assert.NoError(t, err)
 
 		api.AssertExpectations(t)
@@ -379,22 +379,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name:   "groups",
-								Values: []saml2Types.AttributeValue{},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetGroups to return existing groups
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -426,18 +410,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock logging
 		api.On("LogDebug", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("handle DeleteMember failure during cleanup", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -450,7 +423,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("handle DeleteMember failure during cleanup", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetGroups to return existing groups
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -467,18 +448,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("LogDebug", mock.Anything).Return()
 		api.On("LogError", "Failed to remove user from group", "user_id", "user1", "group_id", "group1", "error", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err) // Should not return error even if deletion fails
-		api.AssertExpectations(t)
-	})
-
-	t.Run("handle syncable processing failure during cleanup", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -491,7 +461,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err) // Should not return error even if deletion fails
+		api.AssertExpectations(t)
+	})
+
+	t.Run("handle syncable processing failure during cleanup", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetGroups to return existing groups
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -513,7 +491,20 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("LogError", "Failed to get group teams", "group_id", "group1", "error", mock.Anything).Return()
 		api.On("LogError", "Failed to get group channels", "group_id", "group1", "error", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err) // Should not return error even if syncable processing fails
 		api.AssertExpectations(t)
 	})
@@ -522,24 +513,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name: "groups",
-								Values: []saml2Types.AttributeValue{
-									{Value: "newgroup"},
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
@@ -589,18 +562,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("GetGroupByPath fails", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -615,7 +577,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("GetGroupByPath fails", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
@@ -646,18 +616,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("StoreGroupID fails", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -672,7 +631,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("StoreGroupID fails", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
@@ -713,7 +680,22 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "newgroup"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
@@ -722,25 +704,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with two groups
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name: "groups",
-								Values: []saml2Types.AttributeValue{
-									{Value: "group1"}, // Will remain
-									{Value: "group2"}, // Will be added
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetKeycloakGroupID calls
 		mockKVStore.EXPECT().
@@ -779,7 +742,23 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"}, // Will remain
+									{Value: "group2"}, // Will be added
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
@@ -788,24 +767,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name: "groups",
-								Values: []saml2Types.AttributeValue{
-									{Value: "group1"},
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -824,18 +785,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("groups in assertion", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -844,14 +794,21 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 								Name: "groups",
 								Values: []saml2Types.AttributeValue{
 									{Value: "group1"},
-									{Value: "group2"},
 								},
 							},
 						},
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("groups in assertion", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID calls
 		mockKVStore.EXPECT().
@@ -887,18 +844,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("multiple teams with different AutoAdd settings", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with one group
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -907,13 +853,22 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 								Name: "groups",
 								Values: []saml2Types.AttributeValue{
 									{Value: "group1"},
+									{Value: "group2"},
 								},
 							},
 						},
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("multiple teams with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -960,18 +915,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock GetGroupSyncables for channels (empty)
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("multiple channels with different AutoAdd settings", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with one group
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -986,7 +930,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("multiple channels with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -1033,18 +985,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err)
-		api.AssertExpectations(t)
-	})
-
-	t.Run("mixed team and channel syncables with different AutoAdd settings", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with one group
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -1059,7 +1000,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("mixed team and channel syncables with different AutoAdd settings", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -1111,7 +1060,22 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
@@ -1120,22 +1084,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with empty groups (triggering removal)
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name:   "groups",
-								Values: []saml2Types.AttributeValue{},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetGroups to return existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -1204,7 +1152,20 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock logging
 		api.On("LogDebug", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err)
 		api.AssertExpectations(t)
 	})
@@ -1213,24 +1174,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with two groups
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name: "groups",
-								Values: []saml2Types.AttributeValue{
-									{Value: "group1"},
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -1284,7 +1227,22 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"channel_id", "channel2",
 			"error", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite partial failures
 		api.AssertExpectations(t)
 
@@ -1301,22 +1259,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with empty groups (triggering removal)
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name:   "groups",
-								Values: []saml2Types.AttributeValue{},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetGroups to return existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -1353,7 +1295,20 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock success logging
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite partial failures
 		api.AssertExpectations(t)
 	})
@@ -1362,24 +1317,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with one group
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name: "groups",
-								Values: []saml2Types.AttributeValue{
-									{Value: "group1"},
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -1431,18 +1368,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"team_id", "team3",
 			"error", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
-		assert.NoError(t, err) // Overall operation should succeed despite permission failures
-		api.AssertExpectations(t)
-	})
-
-	t.Run("channel permission scenarios", func(t *testing.T) {
-		// Reset the mock
-		api = &plugintest.API{}
-		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with one group
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
 				{
 					AttributeStatement: &saml2Types.AttributeStatement{
@@ -1457,7 +1383,15 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 					},
 				},
 			},
-		}, nil)
+		}, "groups")
+		assert.NoError(t, err) // Overall operation should succeed despite permission failures
+		api.AssertExpectations(t)
+	})
+
+	t.Run("channel permission scenarios", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
 
 		// Mock GetKeycloakGroupID
 		mockKVStore.EXPECT().
@@ -1518,7 +1452,22 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			"channel_id", "channel4",
 			"error", mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "group1"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite permission failures
 		api.AssertExpectations(t)
 	})
@@ -1527,22 +1476,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
-
-		// Mock ValidateSAMLResponse with empty groups
-		api.On("ValidateSAMLResponse", "encoded-xml").Return(&saml2.AssertionInfo{
-			Assertions: []saml2Types.Assertion{
-				{
-					AttributeStatement: &saml2Types.AttributeStatement{
-						Attributes: []saml2Types.Attribute{
-							{
-								Name:   "groups",
-								Values: []saml2Types.AttributeValue{},
-							},
-						},
-					},
-				},
-			},
-		}, nil)
 
 		// Mock GetGroups to return existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -1579,7 +1512,20 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock success logging
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
 
-		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, "encoded-xml", "groups")
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name:   "groups",
+								Values: []saml2Types.AttributeValue{},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
 		assert.NoError(t, err) // Overall operation should succeed despite partial failures
 		api.AssertExpectations(t)
 	})
