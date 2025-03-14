@@ -25,37 +25,54 @@ const GroupsTable: React.FC = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
     const perPage = 20;
 
     // Fetch total count only once on mount
     React.useEffect(() => {
         const fetchCount = async () => {
+            setIsLoading(true);
             const response = await Client.getGroupsCount();
             if (response.count) {
                 setTotalCount(response.count);
             }
+            setIsLoading(false);
         };
         fetchCount();
     }, []);
 
     const debouncedSearch = useCallback(
         debounce(async (search: string) => {
-            const response = await Client.getGroups(currentPage, perPage, search);
-            if (response.groups) {
-                const newGroupsMap: Map<string, Group> = new Map(
-                    response.groups.map((group: Group) => [group.remote_id, group]),
-                );
-                setGroupsMap(newGroupsMap);
-            }
+            setCurrentPage(0);
+            await fetchGroups(0, search);
         }, 500),
-        [currentPage, perPage],
+        [],
     );
 
-    // Fetch groups when page changes or search term updates
+    // Separate function to fetch groups based on page and search term
+    const fetchGroups = async (page: number, search: string) => {
+        setIsLoading(true);
+        const response = await Client.getGroups(page, perPage, search);
+        if (response.groups) {
+            const newGroupsMap: Map<string, Group> = new Map(
+                response.groups.map((group: Group) => [group.remote_id, group]),
+            );
+            setGroupsMap(newGroupsMap);
+        }
+        setCurrentPage(page);
+        setIsLoading(false);
+    };
+
+    // Handle page changes
+    const handlePageChange = (newPage: number) => {
+        setCurrentPage(newPage);
+        fetchGroups(newPage, searchTerm);
+    };
+
+    // Fetch groups when component mounts
     React.useEffect(() => {
-        debouncedSearch(searchTerm);
-        return () => debouncedSearch.cancel();
-    }, [currentPage, searchTerm, debouncedSearch]);
+        fetchGroups(currentPage, searchTerm);
+    }, []);
 
     const renderButtonText = () => {
         const selectedGroupsArray = Array.from(selectedGroups);
@@ -84,7 +101,7 @@ const GroupsTable: React.FC = () => {
                         value={searchTerm}
                         onChange={(e) => {
                             setSearchTerm(e.target.value);
-                            setCurrentPage(0); // Reset to first page on new search
+                            debouncedSearch(e.target.value);
                         }}
                     />
                 </div>
@@ -129,7 +146,15 @@ const GroupsTable: React.FC = () => {
                                 // Update the map with the linked groups
                                 const newGroupsMap = new Map(groupsMap);
                                 results.forEach((linkedGroup) => {
-                                    newGroupsMap.set(linkedGroup.remote_id, linkedGroup);
+                                    if (linkedGroup) {
+                                        const existingGroup = newGroupsMap.get(linkedGroup.remote_id);
+                                        if (existingGroup) {
+                                            newGroupsMap.set(linkedGroup.remote_id, {
+                                                ...existingGroup,
+                                                ...linkedGroup,
+                                            });
+                                        }
+                                    }
                                 });
                                 setGroupsMap(newGroupsMap);
                             }
@@ -152,45 +177,58 @@ const GroupsTable: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {Array.from(groupsMap.values()).map((group) => (
-                        <tr key={group.id}>
-                            <td>
-                                <label className='checkbox-label'>
-                                    <input
-                                        type='checkbox'
-                                        checked={selectedGroups.has(group.remote_id)}
-                                        onChange={(e) => {
-                                            const newSelected = new Set(selectedGroups);
-                                            if (e.target.checked) {
-                                                newSelected.add(group.remote_id);
-                                            } else {
-                                                newSelected.delete(group.remote_id);
-                                            }
-                                            setSelectedGroups(newSelected);
-                                        }}
-                                    />
-                                    <span>{group.display_name}</span>
-                                </label>
-                            </td>
-                            <td>
-                                <div className='linking-status'>
-                                    {group.id && group.delete_at === 0 ? (
-                                        <>
-                                            <i className='icon-link'/> {'Linked'}
-                                            <Link
-                                                to={`/admin_console/user_management/groups/${group.id}`}
-                                                className='action-link'
-                                            >{'Edit'}</Link>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className='icon-unlink'/> {'Not Linked'}
-                                        </>
-                                    )}
+                    {isLoading ? (
+                        <tr>
+                            <td
+                                colSpan={2}
+                                className='loading-container'
+                            >
+                                <div className='loading-spinner'>
+                                    <i className='fa fa-spinner fa-spin fa-2x'/>
                                 </div>
                             </td>
                         </tr>
-                    ))}
+                    ) : (
+                        Array.from(groupsMap.values()).map((group) => (
+                            <tr key={group.id}>
+                                <td>
+                                    <label className='checkbox-label'>
+                                        <input
+                                            type='checkbox'
+                                            checked={selectedGroups.has(group.remote_id)}
+                                            onChange={(e) => {
+                                                const newSelected = new Set(selectedGroups);
+                                                if (e.target.checked) {
+                                                    newSelected.add(group.remote_id);
+                                                } else {
+                                                    newSelected.delete(group.remote_id);
+                                                }
+                                                setSelectedGroups(newSelected);
+                                            }}
+                                        />
+                                        <span>{group.display_name}</span>
+                                    </label>
+                                </td>
+                                <td>
+                                    <div className='linking-status'>
+                                        {group.id && group.delete_at === 0 ? (
+                                            <>
+                                                <i className='icon-link'/> {'Linked'}
+                                                <Link
+                                                    to={`/admin_console/user_management/groups/${group.id}`}
+                                                    className='action-link'
+                                                >{'Edit'}</Link>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className='icon-unlink'/> {'Not Linked'}
+                                            </>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))
+                    )}
                 </tbody>
             </table>
 
@@ -198,13 +236,13 @@ const GroupsTable: React.FC = () => {
                 <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
                 <button
                     disabled={currentPage === 0}
-                    onClick={() => setCurrentPage(currentPage - 1)}
+                    onClick={() => handlePageChange(currentPage - 1)}
                 >
                     <i className='fa fa-chevron-left'/>
                 </button>
                 <button
                     disabled={(currentPage + 1) * perPage >= totalCount}
-                    onClick={() => setCurrentPage(currentPage + 1)}
+                    onClick={() => handlePageChange(currentPage + 1)}
                 >
                     <i className='fa fa-chevron-right'/>
                 </button>
