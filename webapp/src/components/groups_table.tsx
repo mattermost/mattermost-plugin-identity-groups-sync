@@ -190,7 +190,7 @@ const GroupsTable: React.FC = () => {
                         </tr>
                     ) : (
                         Array.from(groupsMap.values()).map((group) => (
-                            <tr key={group.id}>
+                            <tr key={group.remote_id}>
                                 <td>
                                     <label className='checkbox-label'>
                                         <input
