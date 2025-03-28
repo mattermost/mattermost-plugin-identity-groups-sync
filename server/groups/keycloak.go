@@ -76,6 +76,23 @@ func NewKeycloakClient(hostURL, realm, clientID, clientSecret string, kvstore kv
 	}
 }
 
+// createJWTFromGocloakJWT creates a model.JWT from a gocloak.JWT
+func createJWTFromGocloakJWT(gocloakJWT *gocloak.JWT) *model.JWT {
+	now := time.Now()
+	return &model.JWT{
+		AccessToken:                gocloakJWT.AccessToken,
+		ExpiresIn:                  gocloakJWT.ExpiresIn,
+		RefreshToken:               gocloakJWT.RefreshToken,
+		RefreshExpiresIn:           gocloakJWT.RefreshExpiresIn,
+		TokenType:                  gocloakJWT.TokenType,
+		NotBeforePolicy:            gocloakJWT.NotBeforePolicy,
+		SessionState:               gocloakJWT.SessionState,
+		Scope:                      gocloakJWT.Scope,
+		AccessTokenExpirationTime:  now.Add(time.Duration(gocloakJWT.ExpiresIn) * time.Second).UnixMilli(),
+		RefreshTokenExpirationTime: now.Add(time.Duration(gocloakJWT.RefreshExpiresIn) * time.Second).UnixMilli(),
+	}
+}
+
 // Authenticate performs authentication against Keycloak server
 // Returns a JWT token string if successful
 func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
@@ -91,19 +108,7 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 		}
 	}
 
-	now := time.Now()
-	jwt := &model.JWT{
-		AccessToken:                gocloakJWT.AccessToken,
-		ExpiresIn:                  gocloakJWT.ExpiresIn,
-		RefreshToken:               gocloakJWT.RefreshToken,
-		RefreshExpiresIn:           gocloakJWT.RefreshExpiresIn,
-		TokenType:                  gocloakJWT.TokenType,
-		NotBeforePolicy:            gocloakJWT.NotBeforePolicy,
-		SessionState:               gocloakJWT.SessionState,
-		Scope:                      gocloakJWT.Scope,
-		AccessTokenExpirationTime:  now.Add(time.Duration(gocloakJWT.ExpiresIn) * time.Second).UnixMilli(),
-		RefreshTokenExpirationTime: now.Add(time.Duration(gocloakJWT.RefreshExpiresIn) * time.Second).UnixMilli(),
-	}
+	jwt := createJWTFromGocloakJWT(gocloakJWT)
 
 	if err := k.Kvstore.StoreJWT(jwt); err != nil {
 		return "", &AuthError{
@@ -177,18 +182,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 		}
 
 		// Create new token with updated expiration times
-		newToken := &model.JWT{
-			AccessToken:                gocloakJWT.AccessToken,
-			ExpiresIn:                  gocloakJWT.ExpiresIn,
-			RefreshToken:               gocloakJWT.RefreshToken,
-			RefreshExpiresIn:           gocloakJWT.RefreshExpiresIn,
-			TokenType:                  gocloakJWT.TokenType,
-			NotBeforePolicy:            gocloakJWT.NotBeforePolicy,
-			SessionState:               gocloakJWT.SessionState,
-			Scope:                      gocloakJWT.Scope,
-			AccessTokenExpirationTime:  now + (int64(gocloakJWT.ExpiresIn) * 1000),
-			RefreshTokenExpirationTime: now + (int64(gocloakJWT.RefreshExpiresIn) * 1000),
-		}
+		newToken := createJWTFromGocloakJWT(gocloakJWT)
 
 		if err = k.Kvstore.StoreJWT(newToken); err != nil {
 			return "", fmt.Errorf("failed to store refreshed token: %w", err)
