@@ -27,6 +27,7 @@ const GroupsTable: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [selectionError, setSelectionError] = useState<string | null>(null);
     const perPage = 20;
 
     const fetchCount = async (search: string) => {
@@ -73,12 +74,34 @@ const GroupsTable: React.FC = () => {
             }
             setCurrentPage(page);
         } catch (err) {
-            setError('Failed to fetch groups. Please check your plugin configurations.');
+            setError('Failed to fetch groups. Please review your server logs and check your plugin configurations.');
         } finally {
             if (showLoading) {
                 setIsLoading(false);
             }
         }
+    };
+
+    // Check if selection contains both linked and unlinked groups
+    const hasMixedSelection = () => {
+        const selectedGroupsArray = Array.from(selectedGroups);
+        let hasLinked = false;
+        let hasUnlinked = false;
+
+        for (const remoteId of selectedGroupsArray) {
+            const group = groupsMap.get(remoteId);
+            if (group?.id && group.delete_at === 0) {
+                hasLinked = true;
+            } else {
+                hasUnlinked = true;
+            }
+
+            if (hasLinked && hasUnlinked) {
+                return true;
+            }
+        }
+
+        return false;
     };
 
     // Handle page changes
@@ -159,9 +182,35 @@ const GroupsTable: React.FC = () => {
                                     newSelected.delete(group.remote_id);
                                 }
                                 setSelectedGroups(newSelected);
+
+                                // Check for mixed selection immediately
+                                const updatedSelection = e.target.checked ?
+                                    new Set([...selectedGroups, group.remote_id]) :
+                                    new Set([...selectedGroups].filter((id) => id !== group.remote_id));
+
+                                // Check if the new selection contains both linked and unlinked groups
+                                let hasLinked = false;
+                                let hasUnlinked = false;
+
+                                for (const remoteId of updatedSelection) {
+                                    const selectedGroup = groupsMap.get(remoteId);
+                                    if (selectedGroup?.id && selectedGroup.delete_at === 0) {
+                                        hasLinked = true;
+                                    } else {
+                                        hasUnlinked = true;
+                                    }
+
+                                    if (hasLinked && hasUnlinked) {
+                                        setSelectionError('Cannot process mixed selections. Please select only linked or only unlinked groups.');
+                                        return;
+                                    }
+                                }
+
+                                // Clear error if selection is valid
+                                setSelectionError(null);
                             }}
                         />
-                        <span>{group.display_name}</span>
+                        <span title={group.display_name}>{group.display_name}</span>
                     </label>
                 </td>
                 <td>
@@ -264,11 +313,18 @@ const GroupsTable: React.FC = () => {
                             // TODO: Add proper error handling/user notification
                         }
                     }}
-                    disabled={selectedGroups.size === 0}
+                    disabled={selectedGroups.size === 0 || hasMixedSelection()}
                 >
                     {renderButtonText()}
                 </button>
             </div>
+
+            {selectionError && (
+                <div className='selection-error'>
+                    <i className='fa fa-exclamation-triangle'/>
+                    <span>{selectionError}</span>
+                </div>
+            )}
 
             <table className='groups-table'>
                 <thead>

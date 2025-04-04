@@ -106,6 +106,14 @@ func (p *Plugin) OnConfigurationChange() error {
 
 	p.setConfiguration(configuration)
 
+	// Delete the stored JWT token when configuration changes
+	// This ensures we'll re-authenticate with the new settings
+	if p.kvstore != nil {
+		if err := p.client.KV.Delete("keycloak_access_token"); err != nil {
+			p.API.LogWarn("Failed to delete stored JWT token", "error", err)
+		}
+	}
+
 	if p.groupsClient != nil {
 		groupsClient, err := groups.NewClient(p.getConfiguration().GroupsProvider, &p.getConfiguration().KeycloakConfig, p.kvstore, p.client)
 		if err != nil {
