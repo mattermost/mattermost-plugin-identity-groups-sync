@@ -12,14 +12,25 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
-// ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
-// The root URL is currently <siteUrl>/plugins/com.mattermost.plugin-starter-template/api/v1/. Replace com.mattermost.plugin-starter-template with the plugin ID.
+func (p *Plugin) respondWithError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	response := map[string]string{"error": message}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		p.API.LogError("Error encoding error response", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	router := mux.NewRouter()
 
+	// Set content type for all responses
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("Mattermost-User-ID")
 	if userID == "" {
-		http.Error(w, "Not authorized", http.StatusUnauthorized)
+		p.respondWithError(w, http.StatusUnauthorized, "Not authorized")
 		return
 	}
 
@@ -34,9 +45,11 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("Mattermost-User-ID")
 	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleReadUserManagementGroups) {
-		http.Error(w, "Not authorized", http.StatusForbidden)
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
 		return
 	}
 
@@ -65,7 +78,7 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 	samlGroups, err := p.groupsClient.GetGroups(r.Context(), groupsQuery)
 	if err != nil {
 		p.API.LogError("Failed to fetch groups", "error", err)
-		http.Error(w, "Failed to fetch groups", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to fetch groups")
 		return
 	}
 
@@ -92,7 +105,6 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 		Count:  len(groups),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -100,9 +112,11 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("Mattermost-User-ID")
 	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
-		http.Error(w, "Not authorized", http.StatusForbidden)
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
 		return
 	}
 
@@ -111,12 +125,12 @@ func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		p.respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.RemoteID == "" {
-		http.Error(w, "remote_id is required", http.StatusBadRequest)
+		p.respondWithError(w, http.StatusBadRequest, "remote_id is required")
 		return
 	}
 
@@ -124,22 +138,21 @@ func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
 	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, p.groupsClient.GetGroupSource())
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			http.Error(w, "Group not found", http.StatusNotFound)
+			p.respondWithError(w, http.StatusNotFound, "Group not found")
 			return
 		}
 		p.API.LogError("Failed to get group", "error", err)
-		http.Error(w, "Failed to get group", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to get group")
 		return
 	}
 
 	updatedGroup, err := p.client.Group.Delete(existingGroup.Id)
 	if err != nil {
 		p.API.LogError("Failed to delete group", "error", err, "group_id", existingGroup.Id)
-		http.Error(w, "Failed to delete group", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to delete group")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(updatedGroup); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -147,9 +160,11 @@ func (p *Plugin) UnlinkGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("Mattermost-User-ID")
 	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
-		http.Error(w, "Not authorized", http.StatusForbidden)
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
 		return
 	}
 
@@ -158,12 +173,12 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		p.respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.RemoteID == "" {
-		http.Error(w, "remote_id is required", http.StatusBadRequest)
+		p.respondWithError(w, http.StatusBadRequest, "remote_id is required")
 		return
 	}
 
@@ -171,7 +186,7 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 	samlGroup, err := p.groupsClient.GetGroup(r.Context(), req.RemoteID)
 	if err != nil {
 		p.API.LogError("Failed to fetch group from SAML provider", "error", err)
-		http.Error(w, "Failed to fetch group from SAML provider", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to fetch group from SAML provider")
 		return
 	}
 
@@ -179,7 +194,7 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 	existingGroup, err := p.client.Group.GetByRemoteID(req.RemoteID, p.groupsClient.GetGroupSource())
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		p.API.LogError("Failed to check existing group", "error", err)
-		http.Error(w, "Failed to check existing group", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to check existing group")
 		return
 	}
 
@@ -192,7 +207,7 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 		resultGroup, err = p.client.Group.Update(existingGroup)
 		if err != nil {
 			p.API.LogError("Failed to update group", "error", err)
-			http.Error(w, "Failed to update group", http.StatusInternalServerError)
+			p.respondWithError(w, http.StatusInternalServerError, "Failed to update group")
 			return
 		}
 	} else {
@@ -200,12 +215,11 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 		resultGroup, err = p.client.Group.Create(samlGroup)
 		if err != nil {
 			p.API.LogError("Failed to create group", "error", err)
-			http.Error(w, "Failed to create group", http.StatusInternalServerError)
+			p.respondWithError(w, http.StatusInternalServerError, "Failed to create group")
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resultGroup); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -213,16 +227,20 @@ func (p *Plugin) LinkGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Plugin) GetGroupsCount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("Mattermost-User-ID")
 	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleReadUserManagementGroups) {
-		http.Error(w, "Not authorized", http.StatusForbidden)
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
 		return
 	}
 
-	count, err := p.groupsClient.GetGroupsCount(r.Context())
+	query := r.URL.Query()
+	q := query.Get("q")
+	count, err := p.groupsClient.GetGroupsCount(r.Context(), q)
 	if err != nil {
 		p.API.LogError("Failed to fetch groups count", "error", err)
-		http.Error(w, "Failed to fetch groups count", http.StatusInternalServerError)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to fetch groups count")
 		return
 	}
 
@@ -232,7 +250,6 @@ func (p *Plugin) GetGroupsCount(w http.ResponseWriter, r *http.Request) {
 		Count: count,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

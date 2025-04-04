@@ -27,7 +27,7 @@ type Client interface {
 	Authenticate(ctx context.Context) (string, error)
 	GetGroups(ctx context.Context, groupsQuery Query) ([]*mmModel.Group, error)
 	GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error)
-	GetGroupsCount(ctx context.Context) (int, error)
+	GetGroupsCount(ctx context.Context, q string) (int, error)
 	GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error)
 	GetGroupSource() mmModel.GroupSource
 }

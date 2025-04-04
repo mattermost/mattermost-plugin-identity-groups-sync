@@ -241,7 +241,7 @@ func TestKeycloakClient_GetGroupsCount(t *testing.T) {
 			).
 			Return(42, nil)
 
-		count, err := client.GetGroupsCount(context.Background())
+		count, err := client.GetGroupsCount(context.Background(), "")
 		assert.NoError(t, err)
 		assert.Equal(t, 42, count)
 	})
