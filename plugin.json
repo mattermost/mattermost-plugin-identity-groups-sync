@@ -36,28 +36,28 @@
                 ]
             },
             {
-                "key": "KeycloakConfig.Host",
+                "key": "KeycloakHost",
                 "display_name": "Keycloak Host URL",
                 "type": "text",
                 "help_text": "The URL of your Keycloak server (e.g., https://keycloak.example.com).",
                 "placeholder": "Enter your Keycloak host URL"
             },
             {
-                "key": "KeycloakConfig.Realm",
+                "key": "KeycloakRealm",
                 "display_name": "Keycloak Realm",
                 "type": "text",
                 "help_text": "The realm name in your Keycloak server.",
                 "placeholder": "Enter your realm name"
             },
             {
-                "key": "KeycloakConfig.ClientID",
+                "key": "KeycloakClientID",
                 "display_name": "Client ID",
                 "type": "text",
                 "help_text": "The client ID for your application in Keycloak.",
                 "placeholder": "Enter your client ID"
             },
             {
-                "key": "KeycloakConfig.ClientSecret",
+                "key": "KeycloakClientSecret",
                 "display_name": "Client Secret",
                 "type": "text",
                 "help_text": "The client secret for your application in Keycloak.",
@@ -65,7 +65,7 @@
                 "secret": true
             },
             {
-                "key": "KeycloakConfig.GroupsAttribute",
+                "key": "KeycloakGroupsAttribute",
                 "display_name": "Groups Attribute",
                 "type": "text",
                 "help_text": "The SAML assertion attribute that contains the user's groups.",
