@@ -36,6 +36,16 @@
                 ]
             },
             {
+                "key": "EncryptionKey",
+                "display_name": "At Rest Encryption Key:",
+                "type": "generated",
+                "secret": true,
+                "help_text": "The AES encryption key used to encrypt stored access tokens.",
+                "placeholder": "",
+                "default": null,
+                "hosting": ""
+            },
+            {
                 "key": "KeycloakHost",
                 "display_name": "Keycloak Host URL",
                 "type": "text",

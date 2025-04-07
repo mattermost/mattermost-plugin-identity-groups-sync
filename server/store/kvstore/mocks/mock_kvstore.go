@@ -48,6 +48,20 @@ func (mr *MockKVStoreMockRecorder) DeleteKeycloakGroupID(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeycloakGroupID", reflect.TypeOf((*MockKVStore)(nil).DeleteKeycloakGroupID), arg0)
 }
 
+// DeleteKeycloakJWT mocks base method.
+func (m *MockKVStore) DeleteKeycloakJWT() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteKeycloakJWT")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteKeycloakJWT indicates an expected call of DeleteKeycloakJWT.
+func (mr *MockKVStoreMockRecorder) DeleteKeycloakJWT() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteKeycloakJWT", reflect.TypeOf((*MockKVStore)(nil).DeleteKeycloakJWT))
+}
+
 // GetKeycloakGroupID mocks base method.
 func (m *MockKVStore) GetKeycloakGroupID(arg0 string) (string, error) {
 	m.ctrl.T.Helper()

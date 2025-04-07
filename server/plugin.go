@@ -41,9 +41,16 @@ type Plugin struct {
 // OnActivate is invoked when the plugin is activated. If an error is returned, the plugin will be deactivated.
 func (p *Plugin) OnActivate() error {
 	p.client = pluginapi.NewClient(p.API, p.Driver)
-	p.kvstore = kvstore.NewKVStore(p.client)
 
 	config := p.getConfiguration()
+
+	// The encryption key should already be set by OnConfigurationChange
+	if config.EncryptionKey == "" {
+		return errors.New("encryption key is not configured")
+	}
+
+	p.kvstore = kvstore.NewKVStore(p.client, config.EncryptionKey)
+
 	groupsClient, err := groups.NewClient(config.GetGroupsProvider(), config, p.kvstore, p.client)
 	if err != nil {
 		return errors.Wrap(err, "failed to create groups client")
@@ -78,9 +85,9 @@ func (p *Plugin) OnDeactivate() error {
 
 func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *saml2.AssertionInfo) error {
 	config := p.getConfiguration()
-	
+
 	var groupsAttribute string
-	
+
 	// Use a switch statement to handle different group providers
 	switch config.GetGroupsProvider() {
 	case "keycloak":
@@ -91,6 +98,6 @@ func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *sam
 		p.API.LogDebug("SAML login received but no compatible groups provider configured")
 		return nil
 	}
-	
+
 	return p.groupsClient.HandleSAMLLogin(c, user, assertion, groupsAttribute)
 }

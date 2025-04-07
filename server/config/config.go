@@ -13,6 +13,7 @@ type Configuration struct {
 	KeycloakClientSecret    string `json:"keycloakclientsecret"`
 	KeycloakHost            string `json:"keycloakhost"`
 	KeycloakGroupsAttribute string `json:"keycloakgroupsattribute"`
+	EncryptionKey           string `json:"encryptionkey"`
 }
 
 // KeycloakConfig contains all Keycloak-specific configuration
@@ -22,6 +23,7 @@ type KeycloakConfig struct {
 	ClientID        string
 	ClientSecret    string
 	GroupsAttribute string
+	EncryptionKey   string
 }
 
 // ToMap converts the configuration to a map
@@ -47,6 +49,7 @@ func (c *Configuration) GetKeycloakConfig() KeycloakConfig {
 		ClientID:        c.KeycloakClientID,
 		ClientSecret:    c.KeycloakClientSecret,
 		GroupsAttribute: c.KeycloakGroupsAttribute,
+		EncryptionKey:   c.EncryptionKey,
 	}
 }
 
@@ -64,6 +67,7 @@ func (c *Configuration) Clone() *Configuration {
 		KeycloakClientSecret:    c.KeycloakClientSecret,
 		KeycloakHost:            c.KeycloakHost,
 		KeycloakGroupsAttribute: c.KeycloakGroupsAttribute,
+		EncryptionKey:           c.EncryptionKey,
 	}
 	return clone
 }
