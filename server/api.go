@@ -70,6 +70,13 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := query.Get("q")
+	
+	// Validate search query
+	if len(q) > 255 {
+		p.respondWithError(w, http.StatusBadRequest, "Search query too long (max 255 characters)")
+		return
+	}
+	
 	groupsQuery := groups.Query{
 		Page:    page,
 		PerPage: perPage,
@@ -237,6 +244,13 @@ func (p *Plugin) GetGroupsCount(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	q := query.Get("q")
+	
+	// Validate search query
+	if len(q) > 255 {
+		p.respondWithError(w, http.StatusBadRequest, "Search query too long (max 255 characters)")
+		return
+	}
+	
 	count, err := p.groupsClient.GetGroupsCount(r.Context(), q)
 	if err != nil {
 		p.API.LogError("Failed to fetch groups count", "error", err)
