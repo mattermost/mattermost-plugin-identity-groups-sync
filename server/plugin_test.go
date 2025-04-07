@@ -122,7 +122,7 @@ func TestGetGroupsCount(t *testing.T) {
 		api.Mock.On("HasPermissionTo", "user1", model.PermissionSysconsoleReadUserManagementGroups).Return(true).Once()
 
 		mockGroupsClient.EXPECT().
-			GetGroupsCount(gomock.Any()).
+			GetGroupsCount(gomock.Any(), "").
 			Return(5, nil)
 
 		w := httptest.NewRecorder()

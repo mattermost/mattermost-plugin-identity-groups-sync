@@ -146,9 +146,15 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 }
 
 // GetGroupsCount retrieves the total number of groups in Keycloak
-func (k *KeycloakClient) GetGroupsCount(ctx context.Context) (int, error) {
+// If q is provided, it will filter the count based on the search term
+func (k *KeycloakClient) GetGroupsCount(ctx context.Context, q string) (int, error) {
+	params := gocloak.GetGroupsParams{}
+	if q != "" {
+		params.Search = &q
+	}
+
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.Client.GetGroupsCount(ctx, t, k.Realm, gocloak.GetGroupsParams{})
+		return k.Client.GetGroupsCount(ctx, t, k.Realm, params)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to get groups count: %w", err)

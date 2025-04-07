@@ -114,18 +114,18 @@ func (mr *MockClientMockRecorder) GetGroups(arg0, arg1 interface{}) *gomock.Call
 }
 
 // GetGroupsCount mocks base method.
-func (m *MockClient) GetGroupsCount(arg0 context.Context) (int, error) {
+func (m *MockClient) GetGroupsCount(arg0 context.Context, arg1 string) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetGroupsCount", arg0)
+	ret := m.ctrl.Call(m, "GetGroupsCount", arg0, arg1)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetGroupsCount indicates an expected call of GetGroupsCount.
-func (mr *MockClientMockRecorder) GetGroupsCount(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetGroupsCount(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupsCount", reflect.TypeOf((*MockClient)(nil).GetGroupsCount), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupsCount", reflect.TypeOf((*MockClient)(nil).GetGroupsCount), arg0, arg1)
 }
 
 // HandleSAMLLogin mocks base method.
