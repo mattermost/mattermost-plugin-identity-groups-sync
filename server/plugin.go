@@ -78,9 +78,9 @@ func (p *Plugin) OnDeactivate() error {
 
 func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *saml2.AssertionInfo) error {
 	config := p.getConfiguration()
-	
+
 	var groupsAttribute string
-	
+
 	// Use a switch statement to handle different group providers
 	switch config.GetGroupsProvider() {
 	case "keycloak":
@@ -91,6 +91,6 @@ func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *sam
 		p.API.LogDebug("SAML login received but no compatible groups provider configured")
 		return nil
 	}
-	
+
 	return p.groupsClient.HandleSAMLLogin(c, user, assertion, groupsAttribute)
 }
