@@ -26,52 +26,93 @@ const GroupsTable: React.FC = () => {
     const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [selectionError, setSelectionError] = useState<string | null>(null);
     const perPage = 20;
 
-    // Fetch total count only once on mount
+    const fetchCount = async (search: string) => {
+        const response = await Client.getGroupsCount(search);
+        if (response.count) {
+            setTotalCount(response.count);
+        }
+    };
+
+    // Create a debounced function for fetching count
+    const debouncedFetchCount = useCallback(
+        debounce(async (search: string) => {
+            fetchCount(search);
+        }, 500),
+        []);
+
+    // Fetch count whenever search term changes
     React.useEffect(() => {
-        const fetchCount = async () => {
-            setIsLoading(true);
-            const response = await Client.getGroupsCount();
-            if (response.count) {
-                setTotalCount(response.count);
-            }
-            setIsLoading(false);
-        };
-        fetchCount();
-    }, []);
+        debouncedFetchCount(searchTerm);
+    }, [searchTerm, debouncedFetchCount]);
 
     const debouncedSearch = useCallback(
         debounce(async (search: string) => {
             setCurrentPage(0);
-            await fetchGroups(0, search);
+            await fetchGroups(0, search, false);
         }, 500),
         [],
     );
 
     // Separate function to fetch groups based on page and search term
-    const fetchGroups = async (page: number, search: string) => {
-        setIsLoading(true);
-        const response = await Client.getGroups(page, perPage, search);
-        if (response.groups) {
-            const newGroupsMap: Map<string, Group> = new Map(
-                response.groups.map((group: Group) => [group.remote_id, group]),
-            );
-            setGroupsMap(newGroupsMap);
+    const fetchGroups = async (page: number, search: string, showLoading = true) => {
+        if (showLoading) {
+            setIsLoading(true);
         }
-        setCurrentPage(page);
-        setIsLoading(false);
+        setError(null);
+
+        try {
+            const response = await Client.getGroups(page, perPage, search);
+            if (response.groups) {
+                const newGroupsMap: Map<string, Group> = new Map(
+                    response.groups.map((group: Group) => [group.remote_id, group]),
+                );
+                setGroupsMap(newGroupsMap);
+            }
+            setCurrentPage(page);
+        } catch (err) {
+            setError('Failed to fetch groups. Please review your server logs and check your plugin configurations.');
+        } finally {
+            if (showLoading) {
+                setIsLoading(false);
+            }
+        }
+    };
+
+    // Check if selection contains both linked and unlinked groups
+    const hasMixedSelection = () => {
+        const selectedGroupsArray = Array.from(selectedGroups);
+        let hasLinked = false;
+        let hasUnlinked = false;
+
+        for (const remoteId of selectedGroupsArray) {
+            const group = groupsMap.get(remoteId);
+            if (group?.id && group.delete_at === 0) {
+                hasLinked = true;
+            } else {
+                hasUnlinked = true;
+            }
+
+            if (hasLinked && hasUnlinked) {
+                return true;
+            }
+        }
+
+        return false;
     };
 
     // Handle page changes
     const handlePageChange = (newPage: number) => {
         setCurrentPage(newPage);
-        fetchGroups(newPage, searchTerm);
+        fetchGroups(newPage, searchTerm, true);
     };
 
     // Fetch groups when component mounts
     React.useEffect(() => {
-        fetchGroups(currentPage, searchTerm);
+        fetchGroups(currentPage, searchTerm, true);
     }, []);
 
     const renderButtonText = () => {
@@ -82,6 +123,115 @@ const GroupsTable: React.FC = () => {
         });
 
         return isUnlinking ? 'Unlink Selected Groups' : 'Link Selected Groups';
+    };
+
+    // Function to render table content based on loading and error states
+    const renderTableContent = () => {
+        if (isLoading) {
+            return (
+                <tr style={{width: '100%'}}>
+                    <td
+                        colSpan={2}
+                        className='loading-container'
+                    >
+                        <div className='loading-spinner'>
+                            <i className='fa fa-spinner fa-spin fa-2x'/>
+                        </div>
+                    </td>
+                </tr>
+            );
+        }
+
+        if (error) {
+            return (
+                <tr>
+                    <td
+                        colSpan={2}
+                        className='error-container'
+                    >
+                        <div className='error-message'>
+                            <i className='fa fa-exclamation-triangle'/>
+                            <span>{error}</span>
+                            <button
+                                className='retry-button'
+                                onClick={() => {
+                                    fetchGroups(currentPage, searchTerm, true);
+                                    fetchCount(searchTerm);
+                                }}
+                            >
+                                {'Retry'}
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            );
+        }
+
+        return Array.from(groupsMap.values()).map((group) => (
+            <tr key={group.remote_id}>
+                <td>
+                    <label className='checkbox-label'>
+                        <input
+                            type='checkbox'
+                            checked={selectedGroups.has(group.remote_id)}
+                            onChange={(e) => {
+                                const newSelected = new Set(selectedGroups);
+                                if (e.target.checked) {
+                                    newSelected.add(group.remote_id);
+                                } else {
+                                    newSelected.delete(group.remote_id);
+                                }
+                                setSelectedGroups(newSelected);
+
+                                // Check for mixed selection immediately
+                                const updatedSelection = e.target.checked ?
+                                    new Set([...selectedGroups, group.remote_id]) :
+                                    new Set([...selectedGroups].filter((id) => id !== group.remote_id));
+
+                                // Check if the new selection contains both linked and unlinked groups
+                                let hasLinked = false;
+                                let hasUnlinked = false;
+
+                                for (const remoteId of updatedSelection) {
+                                    const selectedGroup = groupsMap.get(remoteId);
+                                    if (selectedGroup?.id && selectedGroup.delete_at === 0) {
+                                        hasLinked = true;
+                                    } else {
+                                        hasUnlinked = true;
+                                    }
+
+                                    if (hasLinked && hasUnlinked) {
+                                        setSelectionError('Cannot process mixed selections. Please select only linked or only unlinked groups.');
+                                        return;
+                                    }
+                                }
+
+                                // Clear error if selection is valid
+                                setSelectionError(null);
+                            }}
+                        />
+                        <span title={group.display_name}>{group.display_name}</span>
+                    </label>
+                </td>
+                <td>
+                    <div className='linking-status'>
+                        {group.id && group.delete_at === 0 ? (
+                            <>
+                                <i className='icon-link'/> {'Linked'}
+                                <Link
+                                    to={`/admin_console/user_management/groups/${group.id}`}
+                                    className='action-link'
+                                >{'Edit'}</Link>
+                            </>
+                        ) : (
+                            <>
+                                <i className='icon-unlink'/> {'Not Linked'}
+                            </>
+                        )}
+                    </div>
+                </td>
+            </tr>
+        ));
     };
 
     return (
@@ -163,11 +313,18 @@ const GroupsTable: React.FC = () => {
                             // TODO: Add proper error handling/user notification
                         }
                     }}
-                    disabled={selectedGroups.size === 0}
+                    disabled={selectedGroups.size === 0 || hasMixedSelection()}
                 >
                     {renderButtonText()}
                 </button>
             </div>
+
+            {selectionError && (
+                <div className='selection-error'>
+                    <i className='fa fa-exclamation-triangle'/>
+                    <span>{selectionError}</span>
+                </div>
+            )}
 
             <table className='groups-table'>
                 <thead>
@@ -177,58 +334,7 @@ const GroupsTable: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {isLoading ? (
-                        <tr>
-                            <td
-                                colSpan={2}
-                                className='loading-container'
-                            >
-                                <div className='loading-spinner'>
-                                    <i className='fa fa-spinner fa-spin fa-2x'/>
-                                </div>
-                            </td>
-                        </tr>
-                    ) : (
-                        Array.from(groupsMap.values()).map((group) => (
-                            <tr key={group.remote_id}>
-                                <td>
-                                    <label className='checkbox-label'>
-                                        <input
-                                            type='checkbox'
-                                            checked={selectedGroups.has(group.remote_id)}
-                                            onChange={(e) => {
-                                                const newSelected = new Set(selectedGroups);
-                                                if (e.target.checked) {
-                                                    newSelected.add(group.remote_id);
-                                                } else {
-                                                    newSelected.delete(group.remote_id);
-                                                }
-                                                setSelectedGroups(newSelected);
-                                            }}
-                                        />
-                                        <span>{group.display_name}</span>
-                                    </label>
-                                </td>
-                                <td>
-                                    <div className='linking-status'>
-                                        {group.id && group.delete_at === 0 ? (
-                                            <>
-                                                <i className='icon-link'/> {'Linked'}
-                                                <Link
-                                                    to={`/admin_console/user_management/groups/${group.id}`}
-                                                    className='action-link'
-                                                >{'Edit'}</Link>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className='icon-unlink'/> {'Not Linked'}
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))
-                    )}
+                    {renderTableContent()}
                 </tbody>
             </table>
 

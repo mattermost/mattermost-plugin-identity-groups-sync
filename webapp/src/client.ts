@@ -14,8 +14,9 @@ class APIClient {
         return this.doGet(`${this.url}/groups?page=${page}&perPage=${perPage}${searchParam}`);
     };
 
-    getGroupsCount = async () => {
-        return this.doGet(`${this.url}/groups/count`);
+    getGroupsCount = async (q?: string) => {
+        const searchParam = q ? `?q=${encodeURIComponent(q)}` : '';
+        return this.doGet(`${this.url}/groups/count${searchParam}`);
     };
 
     linkGroup = async (remoteId: string) => {
