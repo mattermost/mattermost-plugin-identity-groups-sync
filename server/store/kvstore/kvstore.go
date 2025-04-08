@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	keycloakGroupPrefix = "keycloak_group_"
+	keycloakGroupPrefix    = "keycloak_group_"
+	keycloakAccessTokenKey = "keycloak_access_token"
 )
 
 type Client struct {
@@ -34,7 +35,7 @@ func (kv Client) GetKeycloakJWT() (*model.JWT, error) {
 	}
 
 	tokenBytes := []byte{}
-	err := kv.client.KV.Get("keycloak_access_token", &tokenBytes)
+	err := kv.client.KV.Get(keycloakAccessTokenKey, &tokenBytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get keycloak_access_token")
 	}
@@ -77,7 +78,7 @@ func (kv Client) StoreKeycloakJWT(token *model.JWT) error {
 		return errors.Wrap(err, "failed to encrypt token")
 	}
 
-	ok, err := kv.client.KV.Set("keycloak_access_token", bytesToStore)
+	ok, err := kv.client.KV.Set(keycloakAccessTokenKey, bytesToStore)
 	if err != nil {
 		return errors.Wrap(err, "database error occurred when trying to save keycloak_access_token")
 	} else if !ok {
@@ -88,7 +89,7 @@ func (kv Client) StoreKeycloakJWT(token *model.JWT) error {
 
 // DeleteKeycloakJWT removes the JWT token from the KV store
 func (kv Client) DeleteKeycloakJWT() error {
-	err := kv.client.KV.Delete("keycloak_access_token")
+	err := kv.client.KV.Delete(keycloakAccessTokenKey)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete keycloak_access_token")
 	}
