@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
 )
 
 func (p *Plugin) respondWithError(w http.ResponseWriter, code int, message string) {

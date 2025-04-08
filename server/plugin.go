@@ -6,14 +6,15 @@ import (
 	"time"
 
 	saml2 "github.com/mattermost/gosaml2"
-	"github.com/mattermost/mattermost-plugin-groups/server/config"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.

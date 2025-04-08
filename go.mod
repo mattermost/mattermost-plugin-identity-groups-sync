@@ -1,12 +1,12 @@
-module github.com/mattermost/mattermost-plugin-groups
+module github.com/mattermost/mattermost-plugin-identity-groups-sync
 
-go 1.22.0
+go 1.23.0
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/golang/mock v1.6.0
 	github.com/mattermost/gosaml2 v0.8.0
-	github.com/mattermost/mattermost/server/public v0.1.11-0.20250311202423-5e86f4edd304
+	github.com/mattermost/mattermost/server/public v0.1.11
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 )
@@ -25,6 +25,7 @@ require (
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	golang.org/x/mod v0.22.0 // indirect
 )
 
 require (

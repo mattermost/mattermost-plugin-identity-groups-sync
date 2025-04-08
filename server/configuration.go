@@ -5,10 +5,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/config"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
-	"github.com/mattermost/mattermost-plugin-groups/server/utils"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/utils"
 )
 
 // getConfiguration retrieves the active configuration under lock, making it safe to use

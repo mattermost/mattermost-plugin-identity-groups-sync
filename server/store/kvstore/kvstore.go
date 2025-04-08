@@ -6,8 +6,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
-	"github.com/mattermost/mattermost-plugin-groups/server/utils"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/utils"
 )
 
 const (
