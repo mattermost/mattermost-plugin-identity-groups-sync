@@ -32,7 +32,7 @@ const GroupsTable: React.FC = () => {
 
     const fetchCount = async (search: string) => {
         const response = await Client.getGroupsCount(search);
-        if (response.count) {
+        if (response.count !== undefined) {
             setTotalCount(response.count);
         }
     };
@@ -339,19 +339,25 @@ const GroupsTable: React.FC = () => {
             </table>
 
             <div className='pagination'>
-                <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
-                <button
-                    disabled={currentPage === 0}
-                    onClick={() => handlePageChange(currentPage - 1)}
-                >
-                    <i className='fa fa-chevron-left'/>
-                </button>
-                <button
-                    disabled={(currentPage + 1) * perPage >= totalCount}
-                    onClick={() => handlePageChange(currentPage + 1)}
-                >
-                    <i className='fa fa-chevron-right'/>
-                </button>
+                {totalCount > 0 ? (
+                    <>
+                        <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
+                        <button
+                            disabled={currentPage === 0}
+                            onClick={() => handlePageChange(currentPage - 1)}
+                        >
+                            <i className='fa fa-chevron-left'/>
+                        </button>
+                        <button
+                            disabled={(currentPage + 1) * perPage >= totalCount}
+                            onClick={() => handlePageChange(currentPage + 1)}
+                        >
+                            <i className='fa fa-chevron-right'/>
+                        </button>
+                    </>
+                ) : (
+                    <span>{'0 results'}</span>
+                )}
             </div>
         </div>
     );
