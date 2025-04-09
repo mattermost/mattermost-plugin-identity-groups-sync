@@ -6,14 +6,15 @@ import (
 	"time"
 
 	saml2 "github.com/mattermost/gosaml2"
-	"github.com/mattermost/mattermost-plugin-groups/server/config"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
@@ -41,9 +42,16 @@ type Plugin struct {
 // OnActivate is invoked when the plugin is activated. If an error is returned, the plugin will be deactivated.
 func (p *Plugin) OnActivate() error {
 	p.client = pluginapi.NewClient(p.API, p.Driver)
-	p.kvstore = kvstore.NewKVStore(p.client)
 
 	config := p.getConfiguration()
+
+	// The encryption key should already be set by OnConfigurationChange
+	if config.EncryptionKey == "" {
+		return errors.New("encryption key is not configured")
+	}
+
+	p.kvstore = kvstore.NewKVStore(p.client, config.EncryptionKey)
+
 	groupsClient, err := groups.NewClient(config.GetGroupsProvider(), config, p.kvstore, p.client)
 	if err != nil {
 		return errors.Wrap(err, "failed to create groups client")

@@ -13,18 +13,19 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 // KeycloakClient wraps the gocloak client and provides SAML-specific functionality
 type KeycloakClient struct {
-	Client       GoCloak
-	Realm        string
-	ClientID     string
-	ClientSecret string
-	Kvstore      kvstore.KVStore
-	PluginAPI    *pluginapi.Client
+	Client        GoCloak
+	Realm         string
+	ClientID      string
+	ClientSecret  string
+	EncryptionKey string
+	Kvstore       kvstore.KVStore
+	PluginAPI     *pluginapi.Client
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
@@ -68,14 +69,15 @@ func (e *AuthError) Error() string {
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient
-func NewKeycloakClient(hostURL, realm, clientID, clientSecret string, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
+func NewKeycloakClient(hostURL, realm, clientID, clientSecret, encryptionKey string, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
 	return &KeycloakClient{
-		Client:       gocloak.NewClient(hostURL),
-		Realm:        realm,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Kvstore:      kvstore,
-		PluginAPI:    client,
+		Client:        gocloak.NewClient(hostURL),
+		Realm:         realm,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		EncryptionKey: encryptionKey,
+		Kvstore:       kvstore,
+		PluginAPI:     client,
 	}
 }
 

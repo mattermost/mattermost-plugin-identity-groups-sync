@@ -10,8 +10,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/config"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 var (
@@ -48,6 +48,7 @@ func NewClient(provider string, cfg *config.Configuration, kvstore kvstore.KVSto
 			keycloakConfig.Realm,
 			keycloakConfig.ClientID,
 			keycloakConfig.ClientSecret,
+			keycloakConfig.EncryptionKey,
 			kvstore,
 			client,
 		), nil

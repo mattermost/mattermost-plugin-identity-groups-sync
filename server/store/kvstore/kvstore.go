@@ -6,27 +6,36 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/utils"
 )
 
 const (
-	keycloakGroupPrefix = "keycloak_group_"
+	keycloakGroupPrefix    = "keycloak_group_"
+	keycloakAccessTokenKey = "keycloak_access_token"
 )
 
 type Client struct {
-	client *pluginapi.Client
+	client        *pluginapi.Client
+	encryptionKey string
 }
 
-func NewKVStore(client *pluginapi.Client) KVStore {
+func NewKVStore(client *pluginapi.Client, encryptionKey string) KVStore {
 	return Client{
-		client: client,
+		client:        client,
+		encryptionKey: encryptionKey,
 	}
 }
 
 // GetKeycloakJWT retrieves the JWT token from the KV store
 func (kv Client) GetKeycloakJWT() (*model.JWT, error) {
+	// Ensure encryption key is set
+	if kv.encryptionKey == "" {
+		return nil, errors.New("encryption key is not configured")
+	}
+
 	tokenBytes := []byte{}
-	err := kv.client.KV.Get("keycloak_access_token", &tokenBytes)
+	err := kv.client.KV.Get(keycloakAccessTokenKey, &tokenBytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get keycloak_access_token")
 	}
@@ -35,8 +44,15 @@ func (kv Client) GetKeycloakJWT() (*model.JWT, error) {
 	if len(tokenBytes) == 0 {
 		return nil, errors.New("keycloak_access_token_empty")
 	}
+
+	// Decrypt the token
+	decryptedBytes, err := utils.Decrypt([]byte(kv.encryptionKey), tokenBytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decrypt token")
+	}
+
 	token := &model.JWT{}
-	err = json.Unmarshal(tokenBytes, token)
+	err = json.Unmarshal(decryptedBytes, token)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal token")
 	}
@@ -46,16 +62,36 @@ func (kv Client) GetKeycloakJWT() (*model.JWT, error) {
 
 // StoreKeycloakJWT stores the JWT token in the KV store
 func (kv Client) StoreKeycloakJWT(token *model.JWT) error {
+	// Ensure encryption key is set
+	if kv.encryptionKey == "" {
+		return errors.New("encryption key is not configured")
+	}
+
 	tokenBytes, err := json.Marshal(token)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal token")
 	}
 
-	ok, err := kv.client.KV.Set("keycloak_access_token", tokenBytes)
+	// Encrypt the token
+	bytesToStore, err := utils.Encrypt([]byte(kv.encryptionKey), tokenBytes)
 	if err != nil {
-		return errors.Wrap(err, "dataebase error occurred when trying to save keycloak_access_token")
+		return errors.Wrap(err, "failed to encrypt token")
+	}
+
+	ok, err := kv.client.KV.Set(keycloakAccessTokenKey, bytesToStore)
+	if err != nil {
+		return errors.Wrap(err, "database error occurred when trying to save keycloak_access_token")
 	} else if !ok {
 		return errors.New("Failed to save keycloak_access_token")
+	}
+	return nil
+}
+
+// DeleteKeycloakJWT removes the JWT token from the KV store
+func (kv Client) DeleteKeycloakJWT() error {
+	err := kv.client.KV.Delete(keycloakAccessTokenKey)
+	if err != nil {
+		return errors.Wrap(err, "failed to delete keycloak_access_token")
 	}
 	return nil
 }

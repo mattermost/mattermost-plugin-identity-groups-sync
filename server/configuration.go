@@ -5,8 +5,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/config"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/utils"
 )
 
 // getConfiguration retrieves the active configuration under lock, making it safe to use
@@ -59,12 +61,37 @@ func (p *Plugin) OnConfigurationChange() error {
 		return errors.Wrap(err, "failed to load plugin configuration")
 	}
 
+	// Check if we need to generate an encryption key
+	if configuration.EncryptionKey == "" {
+		p.API.LogInfo("No encryption key configured, generating a new one")
+		newKey, err := utils.GenerateSecret()
+		if err != nil {
+			return errors.Wrap(err, "failed to generate encryption key")
+		}
+
+		// Update the configuration with the new key
+		configuration.EncryptionKey = newKey
+
+		// Save the updated configuration back to the server
+		configMap, err := configuration.ToMap()
+		if err != nil {
+			return errors.Wrap(err, "failed to convert configuration to map")
+		}
+
+		if err := p.API.SavePluginConfig(configMap); err != nil {
+			return errors.Wrap(err, "failed to save generated encryption key")
+		}
+	}
+
 	p.setConfiguration(configuration)
 
-	// Delete the stored JWT token when configuration changes
-	// This ensures we'll re-authenticate with the new settings
-	if p.kvstore != nil {
-		if err := p.client.KV.Delete("keycloak_access_token"); err != nil {
+	if p.client != nil {
+		// Recreate the KVStore with the encryption key
+		p.kvstore = kvstore.NewKVStore(p.client, configuration.EncryptionKey)
+
+		// Delete the stored JWT token when configuration changes
+		// This ensures we'll re-authenticate with the new settings
+		if err := p.kvstore.DeleteKeycloakJWT(); err != nil {
 			p.API.LogWarn("Failed to delete stored JWT token", "error", err)
 		}
 	}
