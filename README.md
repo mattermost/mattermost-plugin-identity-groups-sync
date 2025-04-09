@@ -1,218 +1,160 @@
-# Plugin Starter Template
+# Identity Groups Sync Mattermost Plugin
 
-[![Build Status](https://github.com/mattermost/mattermost-plugin-identity-groups-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-identity-groups-sync/actions/workflows/ci.yml)
-[![E2E Status](https://github.com/mattermost/mattermost-plugin-identity-groups-sync/actions/workflows/e2e.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-identity-groups-sync/actions/workflows/e2e.yml)
+This plugin synchronizes user groups from Keycloak to Mattermost.
 
-This plugin serves as a starting point for writing a Mattermost plugin. Feel free to base your own plugin off this repository.
+## License
 
-To learn more about plugins, see [our plugin documentation](https://developers.mattermost.com/extend/plugins/).
+This repository is licensed under the [Mattermost Source Available License](LICENSE) and requires a valid Enterprise Edition License when used for production. See [frequently asked questions](https://docs.mattermost.com/overview/faq.html#mattermost-source-available-license) to learn more.
 
-This template requires node v16 and npm v8. You can download and install nvm to manage your node versions by following the instructions [here](https://github.com/nvm-sh/nvm). Once you've setup the project simply run `nvm i` within the root folder to use the suggested version of node.
+Although a valid Mattermost Enterprise Edition License is required if using this plugin in production, the [Mattermost Source Available License](LICENSE) allows you to compile and test this plugin in development and testing environments without a Mattermost Enterprise Edition License. As such, we welcome community contributions to this plugin.
 
-## Getting Started
-Use GitHub's template feature to make a copy of this repository by clicking the "Use this template" button.
+If you're running an Enterprise Edition of Mattermost and don't already have a valid license, you can obtain a trial license from **System Console > Edition and License**. If you're running the Team Edition of Mattermost, including when you run the server directly from source, you may instead configure your server to enable both testing (`ServiceSettings.EnableTesting`) and developer mode (`ServiceSettings.EnableDeveloper`). These settings are not recommended in production environments.
 
-Alternatively shallow clone the repository matching your plugin name:
+## Features
+- Sync Keycloak groups with Mattermost.
+- Sync groups with teams or channels.
+- Assign Mattermost group memberships to user's on sign in through SAML based on the Group memberships in their SAML assertion.
+
+## How To Install
+
+Download the latest released version and upload to your Mattermost installation on the plugins page of the System Console in the usual way.
+
+## How To Configure
+
+### Prerequisites
+
+1. Setup SAML login with Keycloak, see our guide [here](https://docs.mattermost.com/onboard/sso-saml-keycloak.html). 
+2. Create groups in your Keycloak realm, see the official documentation [here](https://www.keycloak.org/docs/latest/server_admin/index.html#proc-managing-groups_server_administration_guide)
+
+### Keycloak Setup
+
+This guide will breakdown the setup into 4 easy stages
+1. [Keycloak service account setup](#keycloak-service-account-setup)
+2. [Mattermost plugin configuration](#mattermost-plugin-configuration)
+3. [Keycloak group membership attribute](#keycloak-group-membership-attribute)
+4. [Mattermost group link and syncables setup](#mattermost-group-link-and-syncables-setup)
+
+#### Keycloak service account setup
+
+In addition to setting up SAML login you will also need to configure a service account for the plugin to use. You will need to create this client in the same realm as your SAML login client.
+
+1. Navigate to your realm and click **Create Client**.
+2. Configure the following values for step 1:
 ```
-git clone --depth 1 https://github.com/mattermost/mattermost-plugin-identity-groups-sync com.example.my-plugin
+Client type: OpenID Connect
+Client ID:   mattermost-admin
 ```
+![Client creation step 1](./docs/assets/client-creation-step-1.png)
 
-Note that this project uses [Go modules](https://github.com/golang/go/wiki/Modules). Be sure to locate the project outside of `$GOPATH`.
-
-Edit the following files:
-1. `plugin.json` with your `id`, `name`, and `description`:
-```json
-{
-    "id": "com.example.my-plugin",
-    "name": "My Plugin",
-    "description": "A plugin to enhance Mattermost."
-}
+3. Click next and configure the following values: 
 ```
-
-2. `go.mod` with your Go module path, following the `<hosting-site>/<repository>/<module>` convention:
+Client authentication: Enabled
+Service account roles: Enabled
 ```
-module github.com/example/my-plugin
+![Client creation step 2](./docs/assets/client-creation-step-2.png)
+
+4. Disable the other configurations, click next and then Save.
+5. The client is now created but we need to assign a role to the service account so it can view the groups in our realm. Navigate to **Service account roles**.
+![Service account roles page](./docs/assets/service-account-roles.png)
+
+6. Click **Assign role**, in the modal click the dropdown that says **Filter by realm roles** and click **Filter by clients**.
+![Service account roles modal](./docs/assets/assign-roles-modal.png)
+
+7. A new list of roles will appear, select **realm-admin** and click **Assign**.
+8. Click the credentials tab and set **Client authenticator** to **Client Id and Secret**.
+9. Regenerate and copy the **Client Secret**.
+
+#### Mattermost plugin configuration
+
+In this step we will configure the Identity groups sync plugin configurations and view your Keycloak groups inside Mattermost.
+
+1. In system console navigate to **Identity Groups Sync** in the **PLUGINS** section.
+2. Configure the following values:
 ```
-
-3. `.golangci.yml` with your Go module path:
-```yml
-linters-settings:
-  # [...]
-  goimports:
-    local-prefixes: github.com/example/my-plugin
+Groups Provider:        Keycloak
+At Rest Encryption Key: <Click regenerate>
+Keycloak Host URL:      <Your keycloak hostname>
+Keycloak Realm:         <Your keycloak realm>
+Client ID:              mattermost-admin
+Client Secret:          <Paste the value from step 9 of Keycloak service account setup>
+Groups Attribute:       memberOf
 ```
+![System console configurations](./docs/assets/system-console-configs.png)
 
-Build your plugin:
+3. Click Save. At this stage your plugin is configured to view Keycloak groups inside Mattermost system console, the next steps will confirm this.
+4. In system console navigate to the **Groups** page.
+5. Confirm there is a section that says **Keycloak Groups** and you can see a list of your Keycloak groups. If you cannot see your Keycloak groups inside Mattermost, skip to the troubleshooting section.
+![Keycloak groups](./docs/assets/mattermost-groups.png)
+
+### Keycloak group membership attribute
+
+In order for a user's group memberships to sync with Mattermost they need to be included in the SAML attributes when they login.
+
+1. In Keycloak navigate to your Mattermost SAML client.
+2. Click **Client scopes**.
+3. Click **mattermost-dedicated**.
+4. Click **Add mapper** and then **By configuration**.
+5. Click **Group list** as your configured mapper.
+6. Configure your group mapper with the following values:
 ```
-make
+Name:                       GroupList
+Group attribute name:       memberOf
+Friendly name:
+SAML Attribute Name Format: Basic
+Single Group Attribute:     Enabled
+Full group path:            Disabled
 ```
+**Group attribute name** needs to match the Groups Attribute value you set in your plugin configurations in Mattermost
 
-This will produce a single plugin file (with support for multiple architectures) for upload to your Mattermost server:
+![Keycloak mapper](./docs/assets/keycloak-group-mapper.png)
 
+7. Click save.
+
+### Mattermost group link and syncables setup
+
+In this step we will link a Keycloak group to Mattermost, assign it to a channel and sign in as a SAML user.
+
+1. Navigate to the **Groups** section of system console.
+2. Select a group from your Keycloak groups list and click **Link Selected Group**. This creates a **UserGroup** record in the Mattermost database.
+3. Now we need to link this group to a channel. Navigate to **Channels** in system console.
+4. Select the channel you want to assign the group to.
+5. In order to make a channel only accessible to assigned groups you need to enable **Sync Group Members**. This will change the channel to private and remove any non group members from the channel.
+
+![Mattermost sync group memberships](./docs/assets/mattermost-sync-group-memberships.png)
+
+6. Click the **Add Group** button and select your group from the list.
+7. Click save.
+8. Now in order for the group member to be assigned to that group and channel they will need to sign into Mattermost. If you are the user who is a member of that group you will need to sign out and sign back in.
+9. Once you have signed in you should be able to access that channel.
+
+In order to assign groups to teams it is the same process as I just outlined.
+
+## FAQ
+
+### I linked a group, synced it to a channel but the my users were not automatically added to the channel?
+
+If you newly link a Keycloak group to Mattermost that has not been linked before, group members will need sign out and sign back in to be added to the group, channels and teams. This is because we only sync a user's group memberships with existing Mattermost groups on login. If a group is already synced to Mattermost and you add/remove the group from a channel, user's channel membership will automatically update.
+
+### I'm unable to add a group to a channel of a group synced team?
+
+If a team is group synced and you want to group sync a channel within the team, the group assigned to the channel must also be synced to the team.
+
+## Troubleshooting
+
+### The Keycloak groups list is showing an error
+
+![Mattermost groups error](./docs/assets/mattermost-groups-error.png)
+
+1. Check the logs for further details and review your Keycloak plugin configs to ensure the Host, Realm, Client ID and Client Secret are correct.
+
+The following logs indicate an issue with your Client ID or Client Secret:
 ```
-dist/com.example.my-plugin.tar.gz
-```
-
-## Development
-
-To avoid having to manually install your plugin, build and deploy your plugin using one of the following options. In order for the below options to work, you must first enable plugin uploads via your config.json or API and restart Mattermost.
-
-```json
-    "PluginSettings" : {
-        ...
-        "EnableUploads" : true
-    }
-```
-
-### Development guidance 
-
-1. Fewer packages is better: default to the main package unless there's good reason for a new package.
-
-2. Coupling implies same package: don't jump through hoops to break apart code that's naturally coupled.
-
-3. New package for a new interface: a classic example is the sqlstore with layers for monitoring performance, caching and mocking.
-
-4. New package for upstream integration: a discrete client package for interfacing with a 3rd party is often a great place to break out into a new package
-
-### Modifying the server boilerplate
-
-The server code comes with some boilerplate for creating an api, using slash commands, accessing the kvstore and using the cluster package for jobs. 
-
-#### Api
-
-api.go implements the ServeHTTP hook which allows the plugin to implement the http.Handler interface. Requests destined for the `/plugins/{id}` path will be routed to the plugin. This file also contains a sample `HelloWorld` endpoint that is tested in plugin_test.go.
-
-#### Command package
-
-This package contains the boilerplate for adding a slash command and an instance of it is created in the `OnActivate` hook in plugin.go. If you don't need it you can delete the package and remove any reference to `commandClient` in plugin.go. The package also contains an example of how to create a mock for testing.
-
-#### KVStore package
-
-This is a central place for you to access the KVStore methods that are available in the `pluginapi.Client`. The package contains an interface for you to define your methods that will wrap the KVStore methods. An instance of the KVStore is created in the `OnActivate` hook.
-
-### Deploying with Local Mode
-
-If your Mattermost server is running locally, you can enable [local mode](https://docs.mattermost.com/administration/mmctl-cli-tool.html#local-mode) to streamline deploying your plugin. Edit your server configuration as follows:
-
-```json
-{
-    "ServiceSettings": {
-        ...
-        "EnableLocalMode": true,
-        "LocalModeSocketLocation": "/var/tmp/mattermost_local.socket"
-    },
-}
-```
-
-and then deploy your plugin:
-```
-make deploy
-```
-
-You may also customize the Unix socket path:
-```bash
-export MM_LOCALSOCKETPATH=/var/tmp/alternate_local.socket
-make deploy
-```
-
-If developing a plugin with a webapp, watch for changes and deploy those automatically:
-```bash
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
-make watch
-```
-
-### Deploying with credentials
-
-Alternatively, you can authenticate with the server's API with credentials:
-```bash
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_USERNAME=admin
-export MM_ADMIN_PASSWORD=password
-make deploy
-```
-
-or with a [personal access token](https://docs.mattermost.com/developer/personal-access-tokens.html):
-```bash
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
-make deploy
-```
-
-### Releasing new versions
-
-The version of a plugin is determined at compile time, automatically populating a `version` field in the [plugin manifest](plugin.json):
-* If the current commit matches a tag, the version will match after stripping any leading `v`, e.g. `1.3.1`.
-* Otherwise, the version will combine the nearest tag with `git rev-parse --short HEAD`, e.g. `1.3.1+d06e53e1`.
-* If there is no version tag, an empty version will be combined with the short hash, e.g. `0.0.0+76081421`.
-
-To disable this behaviour, manually populate and maintain the `version` field.
-
-## How to Release
-
-To trigger a release, follow these steps:
-
-1. **For Patch Release:** Run the following command:
-    ```
-    make patch
-    ```
-   This will release a patch change.
-
-2. **For Minor Release:** Run the following command:
-    ```
-    make minor
-    ```
-   This will release a minor change.
-
-3. **For Major Release:** Run the following command:
-    ```
-    make major
-    ```
-   This will release a major change.
-
-4. **For Patch Release Candidate (RC):** Run the following command:
-    ```
-    make patch-rc
-    ```
-   This will release a patch release candidate.
-
-5. **For Minor Release Candidate (RC):** Run the following command:
-    ```
-    make minor-rc
-    ```
-   This will release a minor release candidate.
-
-6. **For Major Release Candidate (RC):** Run the following command:
-    ```
-    make major-rc
-    ```
-   This will release a major release candidate.
-
-## Q&A
-
-### How do I make a server-only or web app-only plugin?
-
-Simply delete the `server` or `webapp` folders and remove the corresponding sections from `plugin.json`. The build scripts will skip the missing portions automatically.
-
-### How do I include assets in the plugin bundle?
-
-Place them into the `assets` directory. To use an asset at runtime, build the path to your asset and open as a regular file:
-
-```go
-bundlePath, err := p.API.GetBundlePath()
-if err != nil {
-    return errors.Wrap(err, "failed to get bundle path")
-}
-
-profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "profile_image.png"))
-if err != nil {
-    return errors.Wrap(err, "failed to read profile image")
-}
-
-if appErr := p.API.SetProfileImage(userID, profileImage); appErr != nil {
-    return errors.Wrap(err, "failed to set profile image")
-}
+{"timestamp":"2025-04-09 14:15:49.465 -04:00","level":"error","msg":"Failed to fetch groups","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups: failed to get auth token: authentication error: failed to authenticate client: 401 Unauthorized: unauthorized_client: Invalid client or Invalid client credentials"}
+{"timestamp":"2025-04-09 14:15:49.941 -04:00","level":"error","msg":"Failed to fetch groups count","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups count: failed to get auth token: authentication error: failed to authenticate client: 401 Unauthorized: unauthorized_client: Invalid client or Invalid client credentials"}
 ```
 
-### How do I build the plugin with unminified JavaScript?
-Setting the `MM_DEBUG` environment variable will invoke the debug builds. The simplist way to do this is to simply include this variable in your calls to `make` (e.g. `make dist MM_DEBUG=1`).
+The following logs indicate a permission issue and your service account may not have the correct role applied:
+```
+{"timestamp":"2025-04-09 14:22:11.841 -04:00","level":"error","msg":"Failed to fetch groups","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups: operation failed after reauthentication: 403 Forbidden: unknown_error"}
+{"timestamp":"2025-04-09 14:22:12.333 -04:00","level":"error","msg":"Failed to fetch groups count","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups count: could not get groups count: 403 Forbidden: unknown_error"}
+```
