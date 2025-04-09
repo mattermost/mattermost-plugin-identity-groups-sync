@@ -11,13 +11,19 @@ Although a valid Mattermost Enterprise Edition License is required if using this
 If you're running an Enterprise Edition of Mattermost and don't already have a valid license, you can obtain a trial license from **System Console > Edition and License**. If you're running the Team Edition of Mattermost, including when you run the server directly from source, you may instead configure your server to enable both testing (`ServiceSettings.EnableTesting`) and developer mode (`ServiceSettings.EnableDeveloper`). These settings are not recommended in production environments.
 
 ## Features
+
 - Sync Keycloak groups with Mattermost.
 - Sync groups with teams or channels.
 - Assign Mattermost group memberships to user's on sign in through SAML based on the Group memberships in their SAML assertion.
 
+## Development guide
+
+1. Run Keycloak locally with Mattermost by adding it to your `ENABLED_DOCKER_SERVICES`, see our SAML setup guide [here](https://github.com/mattermost/mattermost/blob/master/server/build/docker/keycloak/README.md).
+2. Follow our plugin setup guide [./docs/INSTALL.md](./docs/INSTALL.md).
+
 ## Installation
 
-Check out our guide in [./docs/INSTALL.md](./docs/INSTALL.md)
+Check out our guide in [./docs/INSTALL.md](./docs/INSTALL.md).
 
 ## FAQ
 
