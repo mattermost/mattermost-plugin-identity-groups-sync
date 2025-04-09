@@ -10,8 +10,8 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 var (
@@ -37,15 +37,21 @@ type Client interface {
 }
 
 // NewClient creates a new SAML client with the given configuration
-func NewClient(provider string, cfg *model.KeycloakConfigs, kvstore kvstore.KVStore, client *pluginapi.Client) (Client, error) {
+func NewClient(provider string, cfg *config.Configuration, kvstore kvstore.KVStore, client *pluginapi.Client) (Client, error) {
 	switch provider {
 	case "keycloak", "":
 		// Always return a KeycloakClient, even if config is empty
 		// Empty config will result in authentication failures until configured
-		if cfg == nil {
-			cfg = &model.KeycloakConfigs{}
-		}
-		return NewKeycloakClient(cfg.Host, cfg.Realm, cfg.ClientID, cfg.ClientSecret, kvstore, client), nil
+		keycloakConfig := cfg.GetKeycloakConfig()
+		return NewKeycloakClient(
+			keycloakConfig.Host,
+			keycloakConfig.Realm,
+			keycloakConfig.ClientID,
+			keycloakConfig.ClientSecret,
+			keycloakConfig.EncryptionKey,
+			kvstore,
+			client,
+		), nil
 	default:
 		return nil, ErrUnsupportedProvider
 	}

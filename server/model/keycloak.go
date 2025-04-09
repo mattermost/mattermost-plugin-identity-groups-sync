@@ -14,12 +14,3 @@ type JWT struct {
 	AccessTokenExpirationTime  int64 `json:"access_token_expiration_time,omitempty"`
 	RefreshTokenExpirationTime int64 `json:"refresh_token_expiration_time,omitempty"`
 }
-
-// KeycloakConfigs holds the configuration for Keycloak integration
-type KeycloakConfigs struct {
-	Realm           string
-	ClientID        string
-	ClientSecret    string
-	Host            string
-	GroupsAttribute string
-}

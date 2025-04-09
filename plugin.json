@@ -1,9 +1,9 @@
 {
-    "id": "com.mattermost.plugin-groups",
-    "name": "Plugin Groups",
+    "id": "com.mattermost.plugin-identity-groups-sync",
+    "name": "Identity Groups Sync",
     "description": "This plugin can be used to integrate with 3rd party group providers.",
-    "homepage_url": "https://github.com/mattermost/mattermost-plugin-groups",
-    "support_url": "https://github.com/mattermost/mattermost-plugin-groups/issues",
+    "homepage_url": "https://github.com/mattermost/mattermost-plugin-identity-groups-sync",
+    "support_url": "https://github.com/mattermost/mattermost-plugin-identity-groups-sync/issues",
     "icon_path": "assets/starter-template-icon.svg",
     "min_server_version": "6.2.1",
     "server": {
@@ -20,7 +20,7 @@
     },
     "settings_schema": {
         "header": "Configure your Group integration.",
-        "footer": "To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/mattermost/mattermost-plugin-groups).",
+        "footer": "To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/mattermost/mattermost-plugin-identity-groups-sync).",
         "settings": [
             {
                 "key": "GroupsProvider",
@@ -36,28 +36,38 @@
                 ]
             },
             {
-                "key": "KeycloakConfig.Host",
+                "key": "EncryptionKey",
+                "display_name": "At Rest Encryption Key:",
+                "type": "generated",
+                "secret": true,
+                "help_text": "The AES encryption key used to encrypt stored access tokens.",
+                "placeholder": "",
+                "default": null,
+                "hosting": ""
+            },
+            {
+                "key": "KeycloakHost",
                 "display_name": "Keycloak Host URL",
                 "type": "text",
                 "help_text": "The URL of your Keycloak server (e.g., https://keycloak.example.com).",
                 "placeholder": "Enter your Keycloak host URL"
             },
             {
-                "key": "KeycloakConfig.Realm",
+                "key": "KeycloakRealm",
                 "display_name": "Keycloak Realm",
                 "type": "text",
                 "help_text": "The realm name in your Keycloak server.",
                 "placeholder": "Enter your realm name"
             },
             {
-                "key": "KeycloakConfig.ClientID",
+                "key": "KeycloakClientID",
                 "display_name": "Client ID",
                 "type": "text",
                 "help_text": "The client ID for your application in Keycloak.",
                 "placeholder": "Enter your client ID"
             },
             {
-                "key": "KeycloakConfig.ClientSecret",
+                "key": "KeycloakClientSecret",
                 "display_name": "Client Secret",
                 "type": "text",
                 "help_text": "The client secret for your application in Keycloak.",
@@ -65,7 +75,7 @@
                 "secret": true
             },
             {
-                "key": "KeycloakConfig.GroupsAttribute",
+                "key": "KeycloakGroupsAttribute",
                 "display_name": "Groups Attribute",
                 "type": "text",
                 "help_text": "The SAML assertion attribute that contains the user's groups.",

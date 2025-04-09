@@ -406,7 +406,7 @@ help:
 mock:
 ifneq ($(HAS_SERVER),)
 	go install github.com/golang/mock/mockgen@v1.6.0
-	mockgen -destination=server/store/kvstore/mocks/mock_kvstore.go -package=mocks github.com/mattermost/mattermost-plugin-groups/server/store/kvstore KVStore
-	mockgen -destination=server/groups/mocks/mock_groups.go -package=mocks github.com/mattermost/mattermost-plugin-groups/server/groups Client
-	mockgen -destination=server/groups/mocks/mock_gocloak.go -package=mocks github.com/mattermost/mattermost-plugin-groups/server/groups GoCloak
+	mockgen -destination=server/store/kvstore/mocks/mock_kvstore.go -package=mocks github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore KVStore
+	mockgen -destination=server/groups/mocks/mock_groups.go -package=mocks github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups Client
+	mockgen -destination=server/groups/mocks/mock_gocloak.go -package=mocks github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups GoCloak
 endif
