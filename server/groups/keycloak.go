@@ -7,21 +7,25 @@ import (
 	"time"
 
 	"github.com/Nerzal/gocloak/v13"
+	saml2 "github.com/mattermost/gosaml2"
 	mmModel "github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
-	"github.com/mattermost/mattermost-plugin-groups/server/store/kvstore"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
 
 // KeycloakClient wraps the gocloak client and provides SAML-specific functionality
 type KeycloakClient struct {
-	Client       GoCloak
-	Realm        string
-	ClientID     string
-	ClientSecret string
-	Kvstore      kvstore.KVStore
-	PluginAPI    *pluginapi.Client
+	Client        GoCloak
+	Realm         string
+	ClientID      string
+	ClientSecret  string
+	EncryptionKey string
+	Kvstore       kvstore.KVStore
+	PluginAPI     *pluginapi.Client
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
@@ -65,14 +69,15 @@ func (e *AuthError) Error() string {
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient
-func NewKeycloakClient(hostURL, realm, clientID, clientSecret string, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
+func NewKeycloakClient(hostURL, realm, clientID, clientSecret, encryptionKey string, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
 	return &KeycloakClient{
-		Client:       gocloak.NewClient(hostURL),
-		Realm:        realm,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Kvstore:      kvstore,
-		PluginAPI:    client,
+		Client:        gocloak.NewClient(hostURL),
+		Realm:         realm,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		EncryptionKey: encryptionKey,
+		Kvstore:       kvstore,
+		PluginAPI:     client,
 	}
 }
 
@@ -105,7 +110,7 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 		RefreshTokenExpirationTime: now.Add(time.Duration(gocloakJWT.RefreshExpiresIn) * time.Second).UnixMilli(),
 	}
 
-	if err := k.Kvstore.StoreJWT(jwt); err != nil {
+	if err := k.Kvstore.StoreKeycloakJWT(jwt); err != nil {
 		return "", &AuthError{
 			Message: "failed to store jwt",
 			Err:     err,
@@ -124,7 +129,7 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 	params := gocloak.GetGroupsParams{
 		First:  &first,
 		Max:    &query.PerPage,
-		Search: &query.Q,
+		Search: &query.Search,
 	}
 	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
 		return k.Client.GetGroups(ctx, t, k.Realm, params)
@@ -163,7 +168,7 @@ func (k *KeycloakClient) GetGroupsCount(ctx context.Context, q string) (int, err
 
 // getAuthToken retrieves and validates the authentication token
 func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
-	jwt, err := k.Kvstore.GetJWT()
+	jwt, err := k.Kvstore.GetKeycloakJWT()
 	now := time.Now().UnixMilli()
 	expirationBuffer := int64(60 * 1000) // 60 seconds in milliseconds
 
@@ -201,7 +206,7 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 			RefreshTokenExpirationTime: now + (int64(gocloakJWT.RefreshExpiresIn) * 1000),
 		}
 
-		if err = k.Kvstore.StoreJWT(newToken); err != nil {
+		if err = k.Kvstore.StoreKeycloakJWT(newToken); err != nil {
 			return "", fmt.Errorf("failed to store refreshed token: %w", err)
 		}
 
@@ -252,6 +257,340 @@ func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel
 	group := result.(*gocloak.Group)
 
 	return k.translateGroup(group), nil
+}
+
+// addUserToTeams adds a user to all teams associated with a group
+func (k *KeycloakClient) addUserToTeams(groupID string, user *mmModel.User) {
+	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group teams",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, teamSyncable := range teamSyncables {
+		if teamSyncable.AutoAdd {
+			if _, err = k.PluginAPI.Team.CreateMember(teamSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to team",
+					"user_id", user.Id,
+					"team_id", teamSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// removeUserFromTeams removes a user from all teams associated with a group
+func (k *KeycloakClient) removeUserFromTeams(groupID string, user *mmModel.User) {
+	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group teams",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, teamSyncable := range teamSyncables {
+		if teamSyncable.AutoAdd {
+			if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from team",
+					"user_id", user.Id,
+					"team_id", teamSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// addUserToChannels adds a user to all channels associated with a group
+func (k *KeycloakClient) addUserToChannels(groupID string, user *mmModel.User) {
+	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group channels",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, channelSyncable := range channelSyncables {
+		if channelSyncable.AutoAdd {
+			if _, err = k.PluginAPI.Channel.AddMember(channelSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to channel",
+					"user_id", user.Id,
+					"channel_id", channelSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// removeUserFromChannels removes a user from all channels associated with a group
+func (k *KeycloakClient) removeUserFromChannels(groupID string, user *mmModel.User) {
+	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
+	if err != nil {
+		k.PluginAPI.Log.Error("Failed to get group channels",
+			"group_id", groupID,
+			"error", err)
+		return
+	}
+
+	for _, channelSyncable := range channelSyncables {
+		if channelSyncable.AutoAdd {
+			if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from channel",
+					"user_id", user.Id,
+					"channel_id", channelSyncable.SyncableId,
+					"error", err)
+			}
+		}
+	}
+}
+
+// getExistingGroups retrieves all groups the user is currently a member of
+func (k *KeycloakClient) GetExistingGroups(userID string) ([]*mmModel.Group, error) {
+	var existingGroups []*mmModel.Group
+	page := 0
+	perPage := 100
+
+	for {
+		groups, err := k.PluginAPI.Group.GetGroups(page, perPage, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: userID,
+		}, nil)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get user's existing groups")
+		}
+
+		existingGroups = append(existingGroups, groups...)
+
+		if len(groups) < perPage {
+			break
+		}
+
+		page++
+	}
+
+	return existingGroups, nil
+}
+
+// ProcessMembershipChanges handles the addition and removal of group memberships
+func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroups []*mmModel.Group, newGroups map[string]*mmModel.Group) ([]string, []string) {
+	var removedFromGroups []string
+	activeGroups := make([]string, 0)
+
+	// Create map of existing group IDs and process removals in one pass
+	existingGroupIDs := make(map[string]bool)
+	for _, existingGroup := range existingGroups {
+		existingGroupIDs[existingGroup.Id] = true
+		if _, exists := newGroups[existingGroup.Id]; !exists {
+			if _, err := k.PluginAPI.Group.DeleteMember(existingGroup.Id, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from group",
+					"user_id", user.Id,
+					"group_id", existingGroup.Id,
+					"error", err)
+			} else {
+				removedFromGroups = append(removedFromGroups, existingGroup.Id)
+			}
+		} else {
+			activeGroups = append(activeGroups, existingGroup.Id)
+		}
+	}
+
+	// Process additions
+	for groupID := range newGroups {
+		if !existingGroupIDs[groupID] {
+			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
+				k.PluginAPI.Log.Error("Failed to add user to group",
+					"user_id", user.Id,
+					"group_id", groupID,
+					"error", err)
+			} else {
+				// Add the newly added group to activeGroups
+				activeGroups = append(activeGroups, groupID)
+			}
+		}
+	}
+
+	return removedFromGroups, activeGroups
+}
+
+// HandleSAMLLogin processes SAML login events and syncs group memberships
+func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, assertionInfo *saml2.AssertionInfo, groupsAttribute string) error {
+	if groupsAttribute == "" {
+		k.PluginAPI.Log.Debug("Groups attribute not configured, skipping group sync")
+		return nil
+	}
+
+	// Get all group values from the SAML assertion
+	var groupNames []string
+	for _, attr := range assertionInfo.Assertions[0].AttributeStatement.Attributes {
+		if attr.Name == groupsAttribute {
+			for _, val := range attr.Values {
+				if val.Value != "" {
+					groupNames = append(groupNames, val.Value)
+				}
+			}
+			break
+		}
+	}
+
+	if len(groupNames) == 0 {
+		k.PluginAPI.Log.Debug("No groups found in SAML assertion")
+		var existingGroups []*mmModel.Group
+		// Even with no new groups, we need to clean up existing memberships
+		existingGroups, err := k.GetExistingGroups(user.Id)
+		if err != nil {
+			return err
+		}
+
+		if len(existingGroups) > 0 {
+			for _, group := range existingGroups {
+				if _, err = k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
+					k.PluginAPI.Log.Error("Failed to remove user from group",
+						"user_id", user.Id,
+						"group_id", group.Id,
+						"error", err)
+					continue
+				}
+				k.removeUserFromTeams(group.Id, user)
+				k.removeUserFromChannels(group.Id, user)
+			}
+		}
+		return nil
+	}
+
+	// Create a map of new groups
+	newGroups := make(map[string]*mmModel.Group)
+
+	// Process all groups from SAML assertion
+	for _, groupName := range groupNames {
+		var keycloakGroupID string
+		keycloakGroupID, err := k.Kvstore.GetKeycloakGroupID(groupName)
+		if err != nil {
+			// If not in KVStore, fetch from Keycloak
+			var result interface{}
+			result, err = k.executeWithRetry(context.Background(), func(token string) (interface{}, error) {
+				return k.Client.GetGroupByPath(context.Background(), token, k.Realm, "/"+groupName)
+			})
+			if err != nil {
+				k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
+				continue
+			}
+
+			group := result.(*gocloak.Group)
+			if group == nil || group.ID == nil {
+				k.PluginAPI.Log.Error("Group not found in Keycloak", "group", groupName)
+				continue
+			}
+
+			keycloakGroupID = *group.ID
+			if err = k.Kvstore.StoreKeycloakGroupID(groupName, keycloakGroupID); err != nil {
+				k.PluginAPI.Log.Error("Failed to store group mapping", "group", groupName, "error", err)
+				continue
+			}
+		}
+
+		var mmGroup *mmModel.Group
+		mmGroup, err = k.PluginAPI.Group.GetByRemoteID(keycloakGroupID, k.GetGroupSource())
+		if err != nil {
+			k.PluginAPI.Log.Error("Failed to get Mattermost group", "remote_id", keycloakGroupID, "error", err)
+			continue
+		}
+
+		newGroups[mmGroup.Id] = mmGroup
+	}
+
+	existingGroups, err := k.GetExistingGroups(user.Id)
+	if err != nil {
+		return err
+	}
+
+	removedFromGroups, activeGroups := k.ProcessMembershipChanges(user, existingGroups, newGroups)
+
+	if len(removedFromGroups) > 0 {
+		for _, groupID := range removedFromGroups {
+			k.removeUserFromTeams(groupID, user)
+			k.removeUserFromChannels(groupID, user)
+		}
+	}
+
+	// Process all active groups (both remaining and newly added)
+	if len(activeGroups) > 0 {
+		for _, groupID := range activeGroups {
+			k.addUserToTeams(groupID, user)
+			k.addUserToChannels(groupID, user)
+		}
+	}
+
+	return nil
+}
+
+func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
+	// Get existing group mappings from KV store
+	existingGroups, err := k.Kvstore.ListKeycloakGroupIDs()
+	if err != nil {
+		return fmt.Errorf("failed to list existing groups: %w", err)
+	}
+
+	// Create a map to track which groups we find in Keycloak
+	foundGroups := make(map[string]bool)
+
+	page := 0
+	perPage := 100
+
+	for {
+		// Get groups page by page
+		params := gocloak.GetGroupsParams{
+			First: &page,
+			Max:   &perPage,
+		}
+		result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
+			return k.Client.GetGroups(ctx, t, k.Realm, params)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to sync groups: %w", err)
+		}
+
+		groups := result.([]*gocloak.Group)
+		if len(groups) == 0 {
+			break // No more groups to process
+		}
+
+		// Store each group mapping individually
+		for _, group := range groups {
+			if group.Name != nil && group.ID != nil {
+				foundGroups[*group.Name] = true
+
+				// Check if mapping already exists with same ID
+				if existingID, exists := existingGroups[*group.Name]; !exists || existingID != *group.ID {
+					if err := k.Kvstore.StoreKeycloakGroupID(*group.Name, *group.ID); err != nil {
+						k.PluginAPI.Log.Error("Failed to store group mapping", "group", *group.Name, "error", err)
+					}
+				}
+			}
+		}
+
+		// If we got less than perPage results, we've reached the end
+		if len(groups) < perPage {
+			break
+		}
+
+		page++ // Move to next page
+	}
+
+	// Remove any groups that exist in KV store but weren't found in Keycloak
+	for groupName := range existingGroups {
+		if !foundGroups[groupName] {
+			if err := k.Kvstore.DeleteKeycloakGroupID(groupName); err != nil {
+				k.PluginAPI.Log.Error("Failed to delete stale group mapping", "group", groupName, "error", err)
+			} else {
+				k.PluginAPI.Log.Debug("Deleted stale group mapping", "group", groupName)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (k *KeycloakClient) GetGroupSource() mmModel.GroupSource {

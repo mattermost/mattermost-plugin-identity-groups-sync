@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
 )
 
 func (p *Plugin) respondWithError(w http.ResponseWriter, code int, message string) {
@@ -69,18 +71,16 @@ func (p *Plugin) GetGroups(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	q := query.Get("q")
-
+	search := query.Get("search")
 	// Validate search query
-	if len(q) > 255 {
+	if len(search) > 255 {
 		p.respondWithError(w, http.StatusBadRequest, "Search query too long (max 255 characters)")
 		return
 	}
-
 	groupsQuery := groups.Query{
 		Page:    page,
 		PerPage: perPage,
-		Q:       q,
+		Search:  search,
 	}
 	samlGroups, err := p.groupsClient.GetGroups(r.Context(), groupsQuery)
 	if err != nil {

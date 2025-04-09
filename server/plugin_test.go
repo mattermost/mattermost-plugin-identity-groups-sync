@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
-	"github.com/mattermost/mattermost-plugin-groups/server/groups/mocks"
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups/mocks"
 )
 
 func TestGetGroups(t *testing.T) {
@@ -61,7 +62,6 @@ func TestGetGroups(t *testing.T) {
 			GetGroups(gomock.Any(), groups.Query{
 				Page:    0,
 				PerPage: 100,
-				Q:       "",
 			}).
 			Return(mmGroups, nil)
 
