@@ -61,8 +61,19 @@ Service account roles: Enabled
 ![Service account roles modal](./docs/assets/assign-roles-modal.png)
 
 7. A new list of roles will appear, select **realm-admin** and click **Assign**.
-8. Click the credentials tab and set **Client authenticator** to **Client Id and Secret**.
-9. Regenerate and copy the **Client Secret**.
+8. Navigate to the **Advanced** section to enable refresh tokens. This is not necessary but will be helpful for troubleshooting roles when configuring the plugin because service account sessions can be revoked directly from Keycloak.
+9. Scroll to the **Open ID Connect Compatibility Modes** section and enabled the following values:
+```
+Use refresh tokens for client credentials grant: Enabled
+```
+![Keycloak refresh tokens](./docs/assets/keycloak-refresh-tokens.png)
+
+10. Click save on that section.
+11. Scroll down to the **Advanced settings** section.
+12. Set the **Access Token Lifespan** value to hours or days. This is not necessary but it means less calls to the authenticate endpoint.
+13. Click save on that section.
+14. Click the credentials tab and set **Client authenticator** to **Client Id and Secret**.
+15. Regenerate and copy the **Client Secret**.
 
 #### Mattermost plugin configuration
 
@@ -85,6 +96,10 @@ Groups Attribute:       memberOf
 4. In system console navigate to the **Groups** page.
 5. Confirm there is a section that says **Keycloak Groups** and you can see a list of your Keycloak groups. If you cannot see your Keycloak groups inside Mattermost, skip to the troubleshooting section.
 ![Keycloak groups](./docs/assets/mattermost-groups.png)
+6. In Keycloak you can **disable** the **Use refresh tokens for client credentials grant** configuration if you please, we have confirmed the correct role setting has been granted. Keycloak says the following about Refresh tokens for client credential grants:
+```
+The OAuth 2.0 RFC6749 Section 4.4.3 states that a refresh_token should not be generated when client_credentials grant is used. If this is off then no refresh_token will be generated and the associated user session will be removed.
+```
 
 ### Keycloak group membership attribute
 
@@ -131,7 +146,7 @@ In order to assign groups to teams it is the same process as I just outlined.
 
 ## FAQ
 
-### I linked a group, synced it to a channel but the my users were not automatically added to the channel?
+### I linked a group, synced it to a channel but the Keycloak group members were not automatically added to the channel?
 
 If you newly link a Keycloak group to Mattermost that has not been linked before, group members will need sign out and sign back in to be added to the group, channels and teams. This is because we only sync a user's group memberships with existing Mattermost groups on login. If a group is already synced to Mattermost and you add/remove the group from a channel, user's channel membership will automatically update.
 
@@ -145,7 +160,7 @@ If a team is group synced and you want to group sync a channel within the team, 
 
 ![Mattermost groups error](./docs/assets/mattermost-groups-error.png)
 
-1. Check the logs for further details and review your Keycloak plugin configs to ensure the Host, Realm, Client ID and Client Secret are correct.
+Check the logs for further details and review your Keycloak plugin configs to ensure the Host, Realm, Client ID and Client Secret are correct.
 
 The following logs indicate an issue with your Client ID or Client Secret:
 ```
@@ -158,3 +173,20 @@ The following logs indicate a permission issue and your service account may not 
 {"timestamp":"2025-04-09 14:22:11.841 -04:00","level":"error","msg":"Failed to fetch groups","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups: operation failed after reauthentication: 403 Forbidden: unknown_error"}
 {"timestamp":"2025-04-09 14:22:12.333 -04:00","level":"error","msg":"Failed to fetch groups count","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups count: could not get groups count: 403 Forbidden: unknown_error"}
 ```
+
+If you applied the incorrect role to your service account user you will need to revoke the service account session in order for your service account to pickup the newly applied role. Remember the correct role is .
+In order to revoke a Keycloak session inside Keycloak you would need to have **Use refresh tokens for client credentials grant** enabled.
+1. Apply the **realm-admin** to the **mattermost-admin** client.
+2. Navigate to **Sessions** in the **mattermost-admin** client.
+3. Click the 3 dots on the right and sign out.
+![Keycloak revoke session](./docs/assets/keycloak-revoke-session.png)
+
+If you don't see the session inside Keycloak you can destroy the session Mattermost has stored by updating the plugin configs in System Console.
+
+### My SAML user is not being added to his groups inside Mattermost when logging in
+
+The first step is to check the logs for any errors, enabling debug logging in Mattermost will log the assertion info which you can use to check which attributes Mattermost recevied. You can use that to verify the Groups attribute is present in your SAML attributes.
+
+Another option to check your SAML attributes is [this](https://docs.mattermost.com/onboard/sso-saml-technical.html#how-can-i-troubleshoot-the-saml-logon-process).
+
+Ensure the system console **Groups Attribute** value matches up with the attribute assigned in the Keycloak SAML client attributes.
