@@ -1,9 +1,9 @@
 {
-    "id": "com.mattermost.plugin-groups",
-    "name": "Plugin Groups",
+    "id": "com.mattermost.plugin-identity-groups-sync",
+    "name": "Identity Groups Sync",
     "description": "This plugin can be used to integrate with 3rd party group providers.",
-    "homepage_url": "https://github.com/mattermost/mattermost-plugin-groups",
-    "support_url": "https://github.com/mattermost/mattermost-plugin-groups/issues",
+    "homepage_url": "https://github.com/mattermost/mattermost-plugin-identity-groups-sync",
+    "support_url": "https://github.com/mattermost/mattermost-plugin-identity-groups-sync/issues",
     "icon_path": "assets/starter-template-icon.svg",
     "min_server_version": "6.2.1",
     "server": {
@@ -20,7 +20,7 @@
     },
     "settings_schema": {
         "header": "Configure your Group integration.",
-        "footer": "To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/mattermost/mattermost-plugin-groups).",
+        "footer": "To report an issue, make a suggestion or a contribution, [check the repository](https://github.com/mattermost/mattermost-plugin-identity-groups-sync).",
         "settings": [
             {
                 "key": "GroupsProvider",

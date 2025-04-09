@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/groups"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups"
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/golang/mock/gomock"
@@ -18,9 +18,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/mattermost/mattermost-plugin-groups/server/groups/mocks"
-	"github.com/mattermost/mattermost-plugin-groups/server/model"
-	kvMocks "github.com/mattermost/mattermost-plugin-groups/server/store/kvstore/mocks"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/groups/mocks"
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
+	kvMocks "github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore/mocks"
 )
 
 func TestKeycloakClient_Authenticate(t *testing.T) {
