@@ -19,7 +19,7 @@ This guide will break down the setup into 4 easy stages:
 
 #### Keycloak service account setup
 
-In addition to setting up SAML login you will also need to configure a service account for the plugin to use. You will need to create this client in the same realm as your SAML login client.
+In addition to setting up SAML login, you will also need to configure a service account for the plugin to use. You will need to create this client in the same realm as your SAML login client.
 
 1. Navigate to your realm and click **Create Client**.
 2. Configure the following values for step 1:
