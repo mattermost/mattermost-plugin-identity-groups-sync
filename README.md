@@ -35,9 +35,17 @@ In the installation documentation we walked through setting up your first synchr
 
 If you newly link a Keycloak group to Mattermost that has not been linked before, group members will need sign out and sign back in to be added to the group, channels and teams. This is because we only sync a user's group memberships with existing Mattermost groups on login. If a group is already synced to Mattermost and you add/remove the group from a channel, user's channel membership will automatically update.
 
+### In which cases will a user's channel and team membership automatically update without requiring the user to sign out and sign back in?
+
+If a user is logged in and is currently a member of Group123, and you assign Group123 to a channel or team, then the user will automatically get added to the channel or team without requiring a logout. The same rule applies if you unassign Group123 from a **group_synced** team or channel.
+
 ### I'm unable to add a group to a channel of a group synced team?
 
 If a team is group synced and you want to group sync a channel within the team, the group assigned to the channel must also be synced to the team.
+
+### Can regular end users see these groups in Mattermost?
+
+These groups will not be visible to end users within Mattermost unless you enable group mentions for that particular group. Enabling group mentions allows users to @ mention groups in posts and allows them to see the current group members. Group mentions are disabled by default for each group.
 
 ## Keycloak limitations 
 
@@ -56,3 +64,7 @@ The only limitation with keeping this map is that if 2 groups swap names with ea
 ### Group memberships from Keycloak are only synced on login
 
 This was the requirements when creating the plugin. The code can be easily updated to include a job in order to sync these on a schedule.
+
+#### Keycloak sub groups
+
+We do not support Keycloak sub groups at this time.

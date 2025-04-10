@@ -162,4 +162,4 @@ The first step is to check the logs for any errors. Enabling debug logging in Ma
 
 Another option to check your SAML attributes is [this](https://docs.mattermost.com/onboard/sso-saml-technical.html#how-can-i-troubleshoot-the-saml-logon-process).
 
-Ensure the System Console **Groups Attribute** value matches up with the attribute assigned in the Keycloak SAML client attributes.
+Ensure the System Console **Groups Attribute** value matches up with the attribute assigned in the Keycloak SAML client attributes. As per the setup instructions for [Keycloak group membership attribute](#keycloak-group-membership-attribute), ensure **Single Group Attribute** is **enabled** and **Full group path** is **disabled**.
