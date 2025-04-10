@@ -746,8 +746,24 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
-		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
-		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "team1",
+				AutoAdd:    false,
+			},
+		}, nil)
+		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{
+				GroupId:    "mm-group-1",
+				SyncableId: "channel1",
+				AutoAdd:    true,
+			},
+		}, nil)
+
+		// Mock team/channel member removal
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
