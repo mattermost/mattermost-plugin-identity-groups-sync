@@ -16,6 +16,11 @@ If you're running an Enterprise Edition of Mattermost and don't already have a v
 - Sync groups with teams or channels.
 - Assign Mattermost group memberships to user's on sign in through SAML based on the Group memberships in their SAML assertion.
 
+## Requirements
+
+- Mattermost Server v10.7 or higher.
+- A valid Mattermost Enterprise Edition license.
+
 ## Development guide
 
 1. Run Keycloak locally with Mattermost by adding it to your `ENABLED_DOCKER_SERVICES`, see our SAML setup guide [here](https://github.com/mattermost/mattermost/blob/master/server/build/docker/keycloak/README.md).
