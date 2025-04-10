@@ -29,7 +29,7 @@ Client ID:   mattermost-admin
 ```
 ![Client creation step 1](./assets/client-creation-step-1.png)
 
-3. Click next and configure the following values: 
+3. Click **Next** and configure the following values: 
 ```
 Client authentication: Enabled
 Service account roles: Enabled
