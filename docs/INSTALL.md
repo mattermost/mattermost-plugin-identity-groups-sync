@@ -17,7 +17,7 @@ This guide will break down the setup into 4 easy stages:
 3. [Keycloak group membership attribute](#keycloak-group-membership-attribute)
 4. [Mattermost group link and syncables setup](#mattermost-group-link-and-syncables-setup)
 
-#### Keycloak service account setup
+### Keycloak service account setup
 
 In addition to setting up SAML login, you will also need to configure a service account for the plugin to use. You will need to create this client in the same realm as your SAML login client.
 
@@ -58,7 +58,7 @@ Use refresh tokens for client credentials grant: Enabled
 14. Click the credentials tab and set **Client authenticator** to **Client Id and Secret**.
 15. Regenerate and copy the **Client Secret**.
 
-#### Mattermost plugin configuration
+### Mattermost plugin configuration
 
 In this step we will configure the Identity groups sync plugin configurations and view your Keycloak groups inside Mattermost.
 
@@ -70,7 +70,7 @@ At Rest Encryption Key: <Click regenerate>
 Keycloak Host URL:      <Your keycloak hostname>
 Keycloak Realm:         <Your keycloak realm>
 Client ID:              mattermost-admin
-Client Secret:          <Paste the value from step 9 of Keycloak service account setup>
+Client Secret:          <Paste the value from step 15 of Keycloak service account setup>
 Groups Attribute:       memberOf
 ```
 ![System console configurations](./assets/system-console-configs.png)
