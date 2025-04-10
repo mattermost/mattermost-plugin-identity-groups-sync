@@ -348,7 +348,7 @@ func (k *KeycloakClient) removeUserFromChannels(groupID string, user *mmModel.Us
 }
 
 // getExistingGroups retrieves all groups the user is currently a member of
-func (k *KeycloakClient) GetExistingGroups(userID string) ([]*mmModel.Group, error) {
+func (k *KeycloakClient) GetExistingGroupMemberships(userID string) ([]*mmModel.Group, error) {
 	var existingGroups []*mmModel.Group
 	page := 0
 	perPage := 100
@@ -357,6 +357,10 @@ func (k *KeycloakClient) GetExistingGroups(userID string) ([]*mmModel.Group, err
 		groups, err := k.PluginAPI.Group.GetGroups(page, perPage, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: userID,
+			// When a group is unlinked the group memberships and syncables remain but the user should be removed from those syncables
+			// so we need to include archived groups to remove the user from them.
+			// If they decide to re-link the group, the user will be added back to the syncables because those relationships remain.
+			IncludeArchived: true,
 		}, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get user's existing groups")
@@ -375,30 +379,30 @@ func (k *KeycloakClient) GetExistingGroups(userID string) ([]*mmModel.Group, err
 }
 
 // ProcessMembershipChanges handles the addition and removal of group memberships
-func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroups []*mmModel.Group, newGroups map[string]*mmModel.Group) ([]string, []string) {
+func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroupMemberships []*mmModel.Group, activeSamlAssertionGroups map[string]*mmModel.Group) ([]string, []string) {
 	var removedFromGroups []string
 	activeGroups := make([]string, 0)
 
 	// Create map of existing group IDs and process removals in one pass
 	existingGroupIDs := make(map[string]bool)
-	for _, existingGroup := range existingGroups {
-		existingGroupIDs[existingGroup.Id] = true
-		if _, exists := newGroups[existingGroup.Id]; !exists {
-			if _, err := k.PluginAPI.Group.DeleteMember(existingGroup.Id, user.Id); err != nil {
+	for _, group := range existingGroupMemberships {
+		existingGroupIDs[group.Id] = true
+		if _, exists := activeSamlAssertionGroups[group.Id]; !exists {
+			if _, err := k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
 				k.PluginAPI.Log.Error("Failed to remove user from group",
 					"user_id", user.Id,
-					"group_id", existingGroup.Id,
+					"group_id", group.Id,
 					"error", err)
 			} else {
-				removedFromGroups = append(removedFromGroups, existingGroup.Id)
+				removedFromGroups = append(removedFromGroups, group.Id)
 			}
 		} else {
-			activeGroups = append(activeGroups, existingGroup.Id)
+			activeGroups = append(activeGroups, group.Id)
 		}
 	}
 
 	// Process additions
-	for groupID := range newGroups {
+	for groupID := range activeSamlAssertionGroups {
 		if !existingGroupIDs[groupID] {
 			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
 				k.PluginAPI.Log.Error("Failed to add user to group",
@@ -437,15 +441,15 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 	if len(groupNames) == 0 {
 		k.PluginAPI.Log.Debug("No groups found in SAML assertion")
-		var existingGroups []*mmModel.Group
+		var existingGroupMemberships []*mmModel.Group
 		// Even with no new groups, we need to clean up existing memberships
-		existingGroups, err := k.GetExistingGroups(user.Id)
+		existingGroupMemberships, err := k.GetExistingGroupMemberships(user.Id)
 		if err != nil {
 			return err
 		}
 
-		if len(existingGroups) > 0 {
-			for _, group := range existingGroups {
+		if len(existingGroupMemberships) > 0 {
+			for _, group := range existingGroupMemberships {
 				if _, err = k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
 					k.PluginAPI.Log.Error("Failed to remove user from group",
 						"user_id", user.Id,
@@ -460,8 +464,8 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		return nil
 	}
 
-	// Create a map of new groups
-	newGroups := make(map[string]*mmModel.Group)
+	// Create a map of groups from the SAML assertion that should be active in Mattermost
+	activeSamlAssertionGroups := make(map[string]*mmModel.Group)
 
 	// Process all groups from SAML assertion
 	for _, groupName := range groupNames {
@@ -498,15 +502,18 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			continue
 		}
 
-		newGroups[mmGroup.Id] = mmGroup
+		// If the group is deleted in Mattermost, skip it because this slice should only contain active groups that you want the user to be a member of.
+		if mmGroup.DeleteAt == 0 {
+			activeSamlAssertionGroups[mmGroup.Id] = mmGroup
+		}
 	}
 
-	existingGroups, err := k.GetExistingGroups(user.Id)
+	existingGroupMemberships, err := k.GetExistingGroupMemberships(user.Id)
 	if err != nil {
 		return err
 	}
 
-	removedFromGroups, activeGroups := k.ProcessMembershipChanges(user, existingGroups, newGroups)
+	removedFromGroups, activeGroups := k.ProcessMembershipChanges(user, existingGroupMemberships, activeSamlAssertionGroups)
 
 	if len(removedFromGroups) > 0 {
 		for _, groupID := range removedFromGroups {

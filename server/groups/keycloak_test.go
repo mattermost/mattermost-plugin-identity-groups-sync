@@ -384,6 +384,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 			{Id: "group2", DisplayName: "Group 2"},
@@ -437,6 +438,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 		}, nil)
@@ -475,6 +477,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 		}, nil)
@@ -553,6 +556,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -614,6 +618,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -678,6 +683,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -725,6 +731,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "mm-group-1", DisplayName: "Group 1"}, // Will remain
 			{Id: "mm-group-3", DisplayName: "Group 3"}, // Will be removed
@@ -783,6 +790,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -832,6 +840,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -884,6 +893,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -954,6 +964,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -1005,6 +1016,66 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.AssertExpectations(t)
 	})
 
+	t.Run("deleted group in SAML assertion", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+
+		// Mock GetKeycloakGroupID
+		mockKVStore.EXPECT().
+			GetKeycloakGroupID("deletedgroup").
+			Return("remote-id-deleted", nil)
+
+		// Mock GetGroupByRemoteID to return a deleted group (DeleteAt > 0)
+		api.On("GetGroupByRemoteID", "remote-id-deleted", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id:       "deleted-group-id",
+			DeleteAt: 12345, // Non-zero DeleteAt indicates the group is deleted
+		}, nil)
+
+		// Mock GetGroups for existing memberships - user is already a member of the deleted group
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+			IncludeArchived: true,
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "deleted-group-id", DisplayName: "Deleted Group", DeleteAt: 12345},
+		}, nil)
+
+		// Mock DeleteGroupMember - user should be removed from the deleted group
+		api.On("DeleteGroupMember", "deleted-group-id", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables for the deleted group
+		api.On("GetGroupSyncables", "deleted-group-id", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "deleted-group-id", SyncableId: "team-deleted", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "deleted-group-id", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "deleted-group-id", SyncableId: "channel-deleted", AutoAdd: true},
+		}, nil)
+
+		// Mock team/channel member removal
+		api.On("DeleteTeamMember", "team-deleted", "user1", "").Return(nil)
+		api.On("DeleteChannelMember", "channel-deleted", "user1").Return(nil)
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "groups",
+								Values: []saml2Types.AttributeValue{
+									{Value: "deletedgroup"}, // Group exists in SAML but is deleted in Mattermost
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "groups")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
 	t.Run("mixed team and channel syncables with different AutoAdd settings", func(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
@@ -1024,6 +1095,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -1089,6 +1161,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 			{Id: "group2", DisplayName: "Group 2"},
@@ -1189,6 +1262,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -1264,6 +1338,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 		}, nil)
@@ -1332,6 +1407,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -1407,6 +1483,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
 
 		// Mock group membership operations
@@ -1481,6 +1558,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 		}, nil)
@@ -1596,12 +1674,13 @@ func TestKeycloakClient_GetExistingGroups(t *testing.T) {
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          "plugin_keycloak",
 			FilterHasMember: "user1",
+			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 			{Id: "group2", DisplayName: "Group 2"},
 		}, nil)
 
-		groups, err := client.GetExistingGroups("user1")
+		groups, err := client.GetExistingGroupMemberships("user1")
 		assert.NoError(t, err)
 		assert.Len(t, groups, 2)
 		assert.Equal(t, "group1", groups[0].Id)
