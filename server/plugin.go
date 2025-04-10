@@ -41,6 +41,14 @@ type Plugin struct {
 
 // OnActivate is invoked when the plugin is activated. If an error is returned, the plugin will be deactivated.
 func (p *Plugin) OnActivate() error {
+	// Check for an enterprise license or a development environment
+	mmConfig := p.API.GetConfig()
+	license := p.API.GetLicense()
+
+	if !pluginapi.IsEnterpriseLicensedOrDevelopment(mmConfig, license) {
+		return errors.New("this plugin requires an Enterprise license")
+	}
+
 	p.client = pluginapi.NewClient(p.API, p.Driver)
 
 	config := p.getConfiguration()
