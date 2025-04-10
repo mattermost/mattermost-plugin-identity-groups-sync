@@ -502,10 +502,12 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			continue
 		}
 
-		// If the group is deleted in Mattermost, skip it because this slice should only contain active groups that you want the user to be a member of.
-		if mmGroup.DeleteAt == 0 {
-			activeSamlAssertionGroups[mmGroup.Id] = mmGroup
+		// If the group is deleted in Mattermost, skip it because activeSamlAssertionGroups should only contain active groups that you want the user to be a member of.
+		if mmGroup.DeleteAt != 0 {
+			continue
 		}
+
+		activeSamlAssertionGroups[mmGroup.Id] = mmGroup
 	}
 
 	existingGroupMemberships, err := k.GetExistingGroupMemberships(user.Id)
