@@ -11,7 +11,7 @@ Download the latest released version and upload to your Mattermost installation 
 
 ### Keycloak Setup
 
-This guide will breakdown the setup into 4 easy stages
+This guide will break down the setup into 4 easy stages:
 1. [Keycloak service account setup](#keycloak-service-account-setup)
 2. [Mattermost plugin configuration](#mattermost-plugin-configuration)
 3. [Keycloak group membership attribute](#keycloak-group-membership-attribute)
