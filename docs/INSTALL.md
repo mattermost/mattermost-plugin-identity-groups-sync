@@ -36,7 +36,7 @@ Service account roles: Enabled
 ```
 ![Client creation step 2](./assets/client-creation-step-2.png)
 
-4. Disable the other configurations, click next and then Save.
+4. Disable the other configurations, click **Next** and then **Save**.
 5. The client is now created but we need to assign a role to the service account so it can view the groups in our realm. Navigate to **Service account roles**.
 ![Service account roles page](./assets/service-account-roles.png)
 
