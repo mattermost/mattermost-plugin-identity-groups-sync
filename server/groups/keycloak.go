@@ -29,7 +29,8 @@ type KeycloakClient struct {
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
-func (k *KeycloakClient) executeWithRetry(ctx context.Context, fn func(string) (interface{}, error)) (interface{}, error) {
+// A timeout is applied to the context to ensure API calls don't hang indefinitely
+func (k *KeycloakClient) executeWithRetry(ctx context.Context, fn func(context.Context, string) (interface{}, error)) (interface{}, error) {
 	if k.Client == nil || k.Realm == "" {
 		return nil, &AuthError{
 			Message: "keycloak not configured",
@@ -37,20 +38,25 @@ func (k *KeycloakClient) executeWithRetry(ctx context.Context, fn func(string) (
 		}
 	}
 
-	token, err := k.getAuthToken(ctx)
+	// Create a timeout context that will be used for all API calls
+	// Default timeout of 30 seconds if the parent context doesn't have a deadline
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	token, err := k.getAuthToken(ctxWithTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth token: %w", err)
 	}
 
-	result, err := fn(token)
+	result, err := fn(ctxWithTimeout, token)
 	if err != nil && strings.Contains(err.Error(), "401 Unauthorized") {
 		// Try to authenticate once
-		newToken, authErr := k.Authenticate(ctx)
+		newToken, authErr := k.Authenticate(ctxWithTimeout)
 		if authErr != nil {
 			return nil, fmt.Errorf("failed to reauthenticate after 401: %w", authErr)
 		}
 		// Retry the request with new token
-		result, err = fn(newToken)
+		result, err = fn(ctxWithTimeout, newToken)
 		if err != nil {
 			return nil, fmt.Errorf("operation failed after reauthentication: %w", err)
 		}
@@ -131,8 +137,8 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 		Max:    &query.PerPage,
 		Search: &query.Search,
 	}
-	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.Client.GetGroups(ctx, t, k.Realm, params)
+	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+		return k.Client.GetGroups(reqCtx, t, k.Realm, params)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get groups: %w", err)
@@ -155,8 +161,8 @@ func (k *KeycloakClient) GetGroupsCount(ctx context.Context, q string) (int, err
 		params.Search = &q
 	}
 
-	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.Client.GetGroupsCount(ctx, t, k.Realm, params)
+	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+		return k.Client.GetGroupsCount(reqCtx, t, k.Realm, params)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to get groups count: %w", err)
@@ -235,8 +241,8 @@ func (k *KeycloakClient) translateGroup(group *gocloak.Group) *mmModel.Group {
 
 // GetGroupMembers retrieves all members of a specific group from Keycloak
 func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([]*gocloak.User, error) {
-	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.Client.GetGroupMembers(ctx, t, k.Realm, groupID, gocloak.GetGroupsParams{})
+	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+		return k.Client.GetGroupMembers(reqCtx, t, k.Realm, groupID, gocloak.GetGroupsParams{})
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group members: %w", err)
@@ -248,8 +254,8 @@ func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([
 
 // GetGroup retrieves a specific group from Keycloak by ID
 func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error) {
-	result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-		return k.Client.GetGroup(ctx, t, k.Realm, groupID)
+	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+		return k.Client.GetGroup(reqCtx, t, k.Realm, groupID)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group: %w", err)
@@ -470,8 +476,8 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
 			var result interface{}
-			result, err = k.executeWithRetry(context.Background(), func(token string) (interface{}, error) {
-				return k.Client.GetGroupByPath(context.Background(), token, k.Realm, "/"+groupName)
+			result, err = k.executeWithRetry(context.Background(), func(reqCtx context.Context, token string) (interface{}, error) {
+				return k.Client.GetGroupByPath(reqCtx, token, k.Realm, "/"+groupName)
 			})
 			if err != nil {
 				k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
@@ -550,8 +556,8 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 			First: &page,
 			Max:   &perPage,
 		}
-		result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
-			return k.Client.GetGroups(ctx, t, k.Realm, params)
+		result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+			return k.Client.GetGroups(reqCtx, t, k.Realm, params)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to sync groups: %w", err)
