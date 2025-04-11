@@ -545,9 +545,13 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 	perPage := 100
 
 	for {
+		first := page
+		if first != 0 {
+			first = (page * perPage)
+		}
 		// Get groups page by page
 		params := gocloak.GetGroupsParams{
-			First: &page,
+			First: &first,
 			Max:   &perPage,
 		}
 		result, err := k.executeWithRetry(ctx, func(t string) (interface{}, error) {
