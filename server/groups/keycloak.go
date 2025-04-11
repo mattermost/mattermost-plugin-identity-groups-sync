@@ -292,13 +292,11 @@ func (k *KeycloakClient) removeUserFromTeams(groupID string, user *mmModel.User)
 	}
 
 	for _, teamSyncable := range teamSyncables {
-		if teamSyncable.AutoAdd {
-			if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
-				k.PluginAPI.Log.Error("Failed to remove user from team",
-					"user_id", user.Id,
-					"team_id", teamSyncable.SyncableId,
-					"error", err)
-			}
+		if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+			k.PluginAPI.Log.Error("Failed to remove user from team",
+				"user_id", user.Id,
+				"team_id", teamSyncable.SyncableId,
+				"error", err)
 		}
 	}
 }
@@ -336,13 +334,11 @@ func (k *KeycloakClient) removeUserFromChannels(groupID string, user *mmModel.Us
 	}
 
 	for _, channelSyncable := range channelSyncables {
-		if channelSyncable.AutoAdd {
-			if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
-				k.PluginAPI.Log.Error("Failed to remove user from channel",
-					"user_id", user.Id,
-					"channel_id", channelSyncable.SyncableId,
-					"error", err)
-			}
+		if err = k.PluginAPI.Channel.DeleteMember(channelSyncable.SyncableId, user.Id); err != nil {
+			k.PluginAPI.Log.Error("Failed to remove user from channel",
+				"user_id", user.Id,
+				"channel_id", channelSyncable.SyncableId,
+				"error", err)
 		}
 	}
 }
