@@ -305,6 +305,8 @@ func (k *KeycloakClient) removeUserFromTeams(groupID string, user *mmModel.User)
 				"error", err)
 			continue
 		}
+		// Don't remove user from the team if it's not group constrained.
+		// Groups get associated with teams when a group is associated to a channel within the team. So we cannot tell if the user was added to the team directly or through the group.
 		if team.GroupConstrained != nil && *team.GroupConstrained {
 			if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
 				k.PluginAPI.Log.Error("Failed to remove user from team",
