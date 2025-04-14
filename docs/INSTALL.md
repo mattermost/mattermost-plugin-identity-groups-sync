@@ -43,7 +43,7 @@ Service account roles: Enabled
 6. Click **Assign role**, and in the modal, click the drop-down that says **Filter by realm roles** and click **Filter by clients**.
 ![Service account roles modal](./assets/assign-roles-modal.png)
 
-7. A new list of roles will appear. Select **realm-admin** and click **Assign**.
+7. A new list of roles will appear. Select **manage-users** and click **Assign**. This grants the relevant permissions to access groups, it is the minimum role the plugin needs to operate.
 8. Navigate to the **Advanced** section to enable refresh tokens. This is not necessary but will be helpful for troubleshooting roles when configuring the plugin because this allows service account sessions to be revoked directly from Keycloak.
 9. Scroll to the **Open ID Connect Compatibility Modes** section and enable the following values:
 ```
@@ -147,14 +147,14 @@ The following logs indicate a permission issue and your service account may not 
 {"timestamp":"2025-04-09 14:22:12.333 -04:00","level":"error","msg":"Failed to fetch groups count","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups count: could not get groups count: 403 Forbidden: unknown_error"}
 ```
 
-If you applied the incorrect role to your service account user you will need to revoke the service account session in order for your service account to pickup the newly applied role. Remember the correct role is .
+If you applied the incorrect role to your service account user you will need to revoke the service account session in order for your service account to pickup the newly applied role. Remember the correct role is **manage-users**.
 In order to revoke a Keycloak session inside Keycloak, you would need to have **Use refresh tokens for client credentials grant** enabled.
-1. Apply the **realm-admin** to the **mattermost-admin** client.
+1. Apply the **manage-users** role to the **mattermost-admin** client.
 2. Navigate to **Sessions** in the **mattermost-admin** client.
 3. Click the 3 dots on the right and sign out.
 ![Keycloak revoke session](./assets/keycloak-revoke-session.png)
 
-If you don't see the session inside Keycloak, you can destroy the session Mattermost has stored by updating the Plugin configurations in the Mattermost System Console.
+If you don't see the session inside Keycloak, you can destroy the session Mattermost has stored by updating the Plugin configurations in the Mattermost System Console and clicking **Save**.
 
 ### My SAML user is not being added to his groups inside Mattermost when logging in
 
