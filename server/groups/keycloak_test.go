@@ -399,6 +399,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			{GroupId: "group1", SyncableId: "team1", AutoAdd: true},
 		}, nil)
 		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(true)}, nil)
 		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
 
 		// Mock channel syncables
@@ -748,9 +749,14 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "mm-group-2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
 			{
-				GroupId:    "mm-group-1",
+				GroupId:    "mm-group-3",
 				SyncableId: "team1",
 				AutoAdd:    false,
+			},
+			{
+				GroupId:    "mm-group-3",
+				SyncableId: "team2",
+				AutoAdd:    true,
 			},
 		}, nil)
 		api.On("GetGroupSyncables", "mm-group-3", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
@@ -762,6 +768,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team/channel member removal
+		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(true)}, nil)
+		// Return non Group contrained team for team2, user should not be removed from it
+		api.On("GetTeam", "team2").Return(&mmModel.Team{Id: "team2", GroupConstrained: nil}, nil)
 		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
 
@@ -1069,7 +1078,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team/channel member removal
-		api.On("DeleteTeamMember", "team-deleted", "user1", "").Return(nil)
+		api.On("GetTeam", "team-deleted").Return(&mmModel.Team{Id: "team-deleted", GroupConstrained: mmModel.NewPointer(false)}, nil)
 		api.On("DeleteChannelMember", "channel-deleted", "user1").Return(nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -1231,7 +1240,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team/channel member removals
-		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(false)}, nil)
+		api.On("GetTeam", "team2").Return(&mmModel.Team{Id: "team2", GroupConstrained: mmModel.NewPointer(true)}, nil)
+		api.On("GetTeam", "team3").Return(&mmModel.Team{Id: "team3", GroupConstrained: mmModel.NewPointer(true)}, nil)
+
 		api.On("DeleteTeamMember", "team2", "user1", "").Return(nil)
 		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
@@ -1373,6 +1385,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 
 		// Mock team member removal with mixed results
+		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(true)}, nil)
+		api.On("GetTeam", "team2").Return(&mmModel.Team{Id: "team2", GroupConstrained: mmModel.NewPointer(true)}, nil)
+		api.On("GetTeam", "team3").Return(&mmModel.Team{Id: "team3", GroupConstrained: mmModel.NewPointer(true)}, nil)
+
 		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)                                          // Success
 		api.On("DeleteTeamMember", "team2", "user1", "").Return(&mmModel.AppError{Message: "removal failed"}) // Failure
 		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)                                          // Success
