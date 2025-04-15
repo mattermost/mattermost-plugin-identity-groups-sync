@@ -50,7 +50,8 @@ If a team is group synced and you want to group sync a channel within the team, 
 
 ### I'm still a member of a team that is not group synced but it is associated to a group that I was previsouly a member of?
 
-Groups get associated with teams when a group is associated to a channel within the team. We cannot tell if the user was added to the team directly or through the group. If the user is removed from that associated group then it's safe to assume that the user can remain in the team if it's not group constrained but they will be removed from the group synced channel. If you would like the user to be removed from the aforementioned team, change the team to **group constrained**.
+Groups can become associated with teams when a group is linked to a channel within that team. When a user is removed from a group, the system cannot distinguish whether they were originally added to the team directly or through the group association. If the team is not group-constrained, users will
+remain members of the team even after being removed from the associated group, but they will be removed from any group-synced channels. If you want users to be automatically removed from the team when they're removed from the associated group, you should configure the team as **group constrained**.
 
 ### Can regular end users see these groups in Mattermost?
 
