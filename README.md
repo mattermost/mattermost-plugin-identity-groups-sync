@@ -48,6 +48,10 @@ If a user is logged in and is currently a member of Group123, and you assign Gro
 
 If a team is group synced and you want to group sync a channel within the team, the group assigned to the channel must also be synced to the team.
 
+### I'm still a member of a team that is not group synced but it is associated to a group that I was previsouly a member of?
+
+Groups get associated with teams when a group is associated to a channel within the team. We cannot tell if the user was added to the team directly or through the group. If the user is removed from that associated group then it's safe to assume that the user can remain in the team if it's not group constrained but they will be removed from the group synced channel. If you would like the user to be removed from the aforementioned team, change the team to **group constrained**.
+
 ### Can regular end users see these groups in Mattermost?
 
 These groups will not be visible to end users within Mattermost unless you enable group mentions for that particular group. Enabling group mentions allows users to @ mention groups in posts and allows them to see the current group members. Group mentions are disabled by default for each group.
