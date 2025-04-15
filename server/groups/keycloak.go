@@ -298,11 +298,22 @@ func (k *KeycloakClient) removeUserFromTeams(groupID string, user *mmModel.User)
 	}
 
 	for _, teamSyncable := range teamSyncables {
-		if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
-			k.PluginAPI.Log.Error("Failed to remove user from team",
-				"user_id", user.Id,
+		team, err := k.PluginAPI.Team.Get(teamSyncable.SyncableId)
+		if err != nil {
+			k.PluginAPI.Log.Error("Failed to get team",
 				"team_id", teamSyncable.SyncableId,
 				"error", err)
+			continue
+		}
+		// Don't remove user from the team if it's not group constrained.
+		// Groups get associated with teams when a group is associated to a channel within the team. So we cannot tell if the user was added to the team directly or through the group.
+		if team.GroupConstrained != nil && *team.GroupConstrained {
+			if err = k.PluginAPI.Team.DeleteMember(teamSyncable.SyncableId, user.Id, ""); err != nil {
+				k.PluginAPI.Log.Error("Failed to remove user from team",
+					"user_id", user.Id,
+					"team_id", teamSyncable.SyncableId,
+					"error", err)
+			}
 		}
 	}
 }
@@ -521,8 +532,8 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 	if len(removedFromGroups) > 0 {
 		for _, groupID := range removedFromGroups {
-			k.removeUserFromTeams(groupID, user)
 			k.removeUserFromChannels(groupID, user)
+			k.removeUserFromTeams(groupID, user)
 		}
 	}
 
