@@ -43,7 +43,7 @@ Service account roles: Enabled
 6. Click **Assign role**, and in the modal, click the drop-down that says **Filter by realm roles** and click **Filter by clients**.
 ![Service account roles modal](./assets/assign-roles-modal.png)
 
-7. A new list of roles will appear. Select **manage-users** and click **Assign**. This grants the relevant permissions to access groups, it is the minimum role the plugin needs to operate.
+7. A new list of roles will appear. Select **manage-users** and click **Assign**. This grants the relevant permissions to access groups, and it is the minimum role the plugin needs to operate.
 8. Navigate to the **Advanced** section to enable refresh tokens. This is not necessary but will be helpful for troubleshooting roles when configuring the plugin because this allows service account sessions to be revoked directly from Keycloak.
 9. Scroll to the **Open ID Connect Compatibility Modes** section and enable the following values:
 ```
