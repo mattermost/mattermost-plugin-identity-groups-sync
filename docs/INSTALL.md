@@ -147,7 +147,7 @@ The following logs indicate a permission issue and your service account may not 
 {"timestamp":"2025-04-09 14:22:12.333 -04:00","level":"error","msg":"Failed to fetch groups count","caller":"app/plugin_api.go:1112","plugin_id":"com.mattermost.plugin-identity-groups-sync","error":"failed to get groups count: could not get groups count: 403 Forbidden: unknown_error"}
 ```
 
-If you applied the incorrect role to your service account user you will need to revoke the service account session in order for your service account to pickup the newly applied role. Remember the correct role is **manage-users**.
+If you applied the incorrect role to your service account user, you will need to revoke the service account session in order for your service account to pick up the newly applied role. Remember the correct role is **manage-users**.
 In order to revoke a Keycloak session inside Keycloak, you would need to have **Use refresh tokens for client credentials grant** enabled.
 1. Apply the **manage-users** role to the **mattermost-admin** client.
 2. Navigate to **Sessions** in the **mattermost-admin** client.
