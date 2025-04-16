@@ -367,7 +367,7 @@ func (k *KeycloakClient) getSyncableTeamsForRemoval(groupID string, teamsToRemov
 	return nil
 }
 
-// getSyncableTeamsForAddition adds team IDs that the user should be added to into the provided map
+// getSyncableChannelsForAddition adds channel IDs that the user should be added to into the provided map
 func (k *KeycloakClient) getSyncableChannelsForAddition(groupID string, channelsToAdd map[string]bool) error {
 	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
 	if err != nil {
@@ -383,7 +383,7 @@ func (k *KeycloakClient) getSyncableChannelsForAddition(groupID string, channels
 	return nil
 }
 
-// getSyncableTeamsForRemoval adds team IDs that the user should be removed from into the provided map
+// getSyncableChannelsForRemoval adds channel IDs that the user should be removed from into the provided map
 func (k *KeycloakClient) getSyncableChannelsForRemoval(groupID string, channelsToRemove map[string]bool) error {
 	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
 	if err != nil {
@@ -554,7 +554,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 	finalChannelsToLeave := make(map[string]bool)
 	// Loop over channels to leave and check if it's in the list of channels to join.
-	// If it's in the channels to join, we don't need to remove the team membership.
+	// If it's in the channels to join, we don't need to remove the channel membership.
 	for channelID := range proposedChannelsToLeave {
 		if _, exists := finalChannelsToJoin[channelID]; !exists {
 			finalChannelsToLeave[channelID] = true
@@ -586,7 +586,7 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]bool, user 
 		// Check if they are a member of the team
 		member, err := k.PluginAPI.Team.GetMember(teamID, user.Id)
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if strings.Contains(strings.ToLower(err.Error()), "not found") {
 				k.PluginAPI.Log.Debug("User has already left the team", "team_id", teamID, "user_id", user.Id)
 			} else {
 				k.PluginAPI.Log.Error("Failed to get team member",
@@ -614,7 +614,7 @@ func (k *KeycloakClient) addUserToTeams(teamsToJoin map[string]bool, user *mmMod
 		// Check if they are a member of the team
 		member, err := k.PluginAPI.Team.GetMember(teamID, user.Id)
 		if err != nil {
-			if !strings.Contains(err.Error(), "not found") {
+			if !strings.Contains(strings.ToLower(err.Error()), "not found") {
 				k.PluginAPI.Log.Error("Failed to get team member",
 					"user_id", user.Id,
 					"team_id", teamID,
@@ -640,7 +640,7 @@ func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]bool,
 		_, err := k.PluginAPI.Channel.GetMember(channelID, user.Id)
 		if err != nil {
 			// check if the error is because the user was not found
-			if strings.Contains(err.Error(), "not found") {
+			if strings.Contains(strings.ToLower(err.Error()), "not found") {
 				k.PluginAPI.Log.Debug("User has already left the channel", "channel_id", channelID, "user_id", user.Id)
 			} else {
 				k.PluginAPI.Log.Error("Failed to get channel member",
@@ -666,7 +666,7 @@ func (k *KeycloakClient) addUserToChannels(channelsToJoin map[string]bool, user 
 		member, err := k.PluginAPI.Channel.GetMember(channelID, user.Id)
 		if err != nil {
 			// check if the error is because the user was not found
-			if !strings.Contains(err.Error(), "not found") {
+			if !strings.Contains(strings.ToLower(err.Error()), "not found") {
 				k.PluginAPI.Log.Error("Failed to get channel member",
 					"user_id", user.Id,
 					"channel_id", channelID,
