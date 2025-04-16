@@ -6,7 +6,7 @@ require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
 	github.com/golang/mock v1.6.0
 	github.com/mattermost/gosaml2 v0.8.0
-	github.com/mattermost/mattermost/server/public v0.1.11
+	github.com/mattermost/mattermost/server/public v0.1.12-0.20250416184029-715a43615587
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 )

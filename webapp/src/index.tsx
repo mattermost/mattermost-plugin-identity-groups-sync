@@ -7,6 +7,7 @@ import type {Store, Action} from 'redux';
 import type {GlobalState} from '@mattermost/types/store';
 
 import GroupsTable from './components/groups_table';
+import MembershipJobButton from './components/membership_job_button';
 
 import manifest from '@/manifest';
 
@@ -16,6 +17,7 @@ export default class Plugin {
         // @see https://developers.mattermost.com/extend/plugins/webapp/reference/
 
         registry.registerSystemConsoleGroupTable(() => <GroupsTable/>);
+        registry.registerAdminConsoleCustomSetting('RunMembershipJob', MembershipJobButton);
     }
 }
 
