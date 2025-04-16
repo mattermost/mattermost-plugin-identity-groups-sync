@@ -948,7 +948,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team member creation only for AutoAdd=true teams
-		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "team member not found"})
+		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
 		api.On("GetTeamMember", "team3", "user1").Return(&mmModel.TeamMember{TeamId: "team1", DeleteAt: 1234}, nil)
 		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)
@@ -1024,9 +1024,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock channel member creation only for AutoAdd=true channels
-		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
+		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
-		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
+		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -1163,9 +1163,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team/channel member creation only for AutoAdd=true
-		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "team member not found"})
+		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
-		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
+		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -1261,8 +1261,8 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("GetChannelMember", "channel2", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel2"}, nil)
-		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
-		api.On("LogError", "Failed to get channel member", "user_id", "user1", "channel_id", "channel3", "error", mock.Anything).Return()
+		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("LogDebug", "User has already left the channel", "channel_id", "channel3", "user_id", "user1").Return()
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
 		api.On("DeleteChannelMember", "channel2", "user1").Return(nil)
 
@@ -1326,17 +1326,17 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		}, nil)
 
 		// Mock team member creation with mixed results
-		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "team member not found"})
-		api.On("GetTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "team member not found"})
-		api.On("GetTeamMember", "team3", "user1").Return(nil, &mmModel.AppError{Message: "team member not found"})
+		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("GetTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("GetTeamMember", "team3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)                                                  // Success
 		api.On("CreateTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to team2"}) // Failure
 		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)                                                  // Success
 
 		// Mock channel member creation with mixed results
-		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
-		api.On("GetChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
-		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "channel member not found"})
+		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("GetChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)                                                     // Success
 		api.On("AddChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to channel2"}) // Failure
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)                                                     // Success
