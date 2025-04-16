@@ -49,6 +49,7 @@ func NewClient(provider string, cfg *config.Configuration, kvstore kvstore.KVSto
 			keycloakConfig.ClientID,
 			keycloakConfig.ClientSecret,
 			keycloakConfig.EncryptionKey,
+			keycloakConfig.LockOutUsersOnRemovalFailure,
 			kvstore,
 			client,
 		), nil
