@@ -443,7 +443,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 						"error", err)
 				}
 				if err := k.getSyncableChannelsForRemoval(group.Id, channelsToLeave); err != nil {
-					k.PluginAPI.Log.Error("Failed to get teams for removal",
+					k.PluginAPI.Log.Error("Failed to get channels for removal",
 						"group_id", group.Id,
 						"error", err)
 				}
@@ -623,7 +623,7 @@ func (k *KeycloakClient) addUserToTeams(teamsToJoin map[string]bool, user *mmMod
 			}
 		}
 
-		if member == nil || (member != nil && member.DeleteAt != 0) {
+		if member == nil || (member.DeleteAt != 0) {
 			if _, err = k.PluginAPI.Team.CreateMember(teamID, user.Id); err != nil {
 				k.PluginAPI.Log.Error("Failed to add user to team",
 					"user_id", user.Id,
