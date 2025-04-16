@@ -544,7 +544,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	}
 
 	finalTeamsToLeave := make(map[string]bool)
-	// Loop over teams for removal and check if it's in the list of teams to add.
+	// Loop over teams to leave and check if it's in the list of teams to join.
 	// If it's in the teams to join, we don't need to remove the team membership.
 	for teamID := range proposedTeamsToLeave {
 		if _, exists := finalTeamsToJoin[teamID]; !exists {
@@ -553,7 +553,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	}
 
 	finalChannelsToLeave := make(map[string]bool)
-	// Loop over teams for removal and check if it's in the list of teams to add
+	// Loop over channels to leave and check if it's in the list of channels to join.
 	// If it's in the channels to join, we don't need to remove the team membership.
 	for channelID := range proposedChannelsToLeave {
 		if _, exists := finalChannelsToJoin[channelID]; !exists {
