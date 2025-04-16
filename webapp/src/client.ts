@@ -27,6 +27,14 @@ class APIClient {
         return this.doWithBody(`${this.url}/groups/unlink`, 'post', {remote_id: remoteId});
     };
 
+    checkSyncJobRunning = async () => {
+        return this.doGet(`${this.url}/jobs/sync`);
+    };
+
+    runSyncJob = async () => {
+        return this.doWithBody(`${this.url}/jobs/sync`, 'post', {});
+    };
+
     private doGet = async (url: string, headers = {}) => {
         const options = {
             method: 'get',

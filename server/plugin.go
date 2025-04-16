@@ -37,6 +37,8 @@ type Plugin struct {
 	groupsClient groups.Client
 
 	groupsJob *cluster.Job
+
+	ReSyncMembershipsJob *cluster.JobOnceScheduler
 }
 
 // OnActivate is invoked when the plugin is activated. If an error is returned, the plugin will be deactivated.
@@ -78,6 +80,18 @@ func (p *Plugin) OnActivate() error {
 
 	p.groupsJob = job
 
+	p.ReSyncMembershipsJob = cluster.GetJobOnceScheduler(p.API)
+
+	err = p.ReSyncMembershipsJob.SetCallback(p.ReSyncTeamAndChannelMemberships)
+	if err != nil {
+		return errors.Wrap(err, "failed to set resync memberships job callback")
+	}
+
+	err = p.ReSyncMembershipsJob.Start()
+	if err != nil {
+		return errors.Wrap(err, "failed to start resync memberships job")
+	}
+
 	return nil
 }
 
@@ -109,4 +123,24 @@ func (p *Plugin) OnSAMLLogin(c *plugin.Context, user *model.User, assertion *sam
 	}
 
 	return p.groupsClient.HandleSAMLLogin(c, user, assertion, groupsAttribute)
+}
+
+func (p *Plugin) ReSyncTeamAndChannelMemberships(key string, props any) {
+	if key == "resync_memberships" {
+		p.API.LogDebug("Resyncing team and channel memberships")
+		err := p.API.DeleteGroupConstrainedMemberships()
+		if err != nil {
+			p.API.LogError("Failed to delete group constrained memberships", "error", err)
+			return
+		}
+		params := model.CreateDefaultMembershipParams{
+			ReAddRemovedMembers: true,
+		}
+		err = p.API.CreateDefaultSyncableMemberships(params)
+		if err != nil {
+			p.API.LogError("Failed to create default syncable memberships", "error", err)
+			return
+		}
+		p.API.LogDebug("Resyncing team and channel memberships completed")
+	}
 }
