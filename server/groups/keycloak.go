@@ -298,9 +298,8 @@ func (k *KeycloakClient) GetExistingGroupMemberships(userID string) ([]*mmModel.
 	return existingGroups, nil
 }
 
-// ProcessMembershipChanges handles the addition and removal of group memberships
-func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGroupMemberships []*mmModel.Group, activeSamlAssertionGroups map[string]*mmModel.Group) ([]string, []string) {
-	var removedFromGroups []string
+func (k *KeycloakClient) GetGroupsForRemovalAndActiveGroups(user *mmModel.User, existingGroupMemberships []*mmModel.Group, activeSamlAssertionGroups map[string]*mmModel.Group) ([]string, []string) {
+	var groupsForRemoval []string
 	activeGroups := make([]string, 0)
 
 	// Create map of existing group IDs and process removals in one pass
@@ -308,14 +307,7 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 	for _, group := range existingGroupMemberships {
 		existingGroupIDs[group.Id] = true
 		if _, exists := activeSamlAssertionGroups[group.Id]; !exists {
-			if _, err := k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
-				k.PluginAPI.Log.Error("Failed to remove user from group",
-					"user_id", user.Id,
-					"group_id", group.Id,
-					"error", err)
-			} else {
-				removedFromGroups = append(removedFromGroups, group.Id)
-			}
+			groupsForRemoval = append(groupsForRemoval, group.Id)
 		} else {
 			activeGroups = append(activeGroups, group.Id)
 		}
@@ -324,19 +316,41 @@ func (k *KeycloakClient) ProcessMembershipChanges(user *mmModel.User, existingGr
 	// Process additions
 	for groupID := range activeSamlAssertionGroups {
 		if !existingGroupIDs[groupID] {
-			if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
-				k.PluginAPI.Log.Error("Failed to add user to group",
-					"user_id", user.Id,
-					"group_id", groupID,
-					"error", err)
-			} else {
-				// Add the newly added group to activeGroups
-				activeGroups = append(activeGroups, groupID)
-			}
+			// Add the newly added group to activeGroups
+			activeGroups = append(activeGroups, groupID)
 		}
 	}
 
-	return removedFromGroups, activeGroups
+	return groupsForRemoval, activeGroups
+}
+
+func (k *KeycloakClient) RemoveUserFromGroups(groupIDs []string, user *mmModel.User) error {
+	for _, groupID := range groupIDs {
+		if _, err := k.PluginAPI.Group.DeleteMember(groupID, user.Id); err != nil {
+			k.PluginAPI.Log.Error("Failed to remove user from group",
+				"user_id", user.Id,
+				"group_id", groupID,
+				"error", err)
+			if k.LockOutUsersOnRemovalFailure {
+				return err
+			}
+		}
+	}
+	return nil
+}
+func (k *KeycloakClient) AddUserToGroups(groupIDs []string, user *mmModel.User) error {
+	for _, groupID := range groupIDs {
+		if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
+			k.PluginAPI.Log.Error("Failed to add user to group",
+				"user_id", user.Id,
+				"group_id", groupID,
+				"error", err)
+			if k.LockOutUsersOnRemovalFailure {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // getSyncableTeamsForAddition adds team IDs that the user should be added to into the provided map
@@ -425,60 +439,52 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		// Even with no new groups, we need to clean up existing memberships
 		existingGroupMemberships, err := k.GetExistingGroupMemberships(user.Id)
 		if err != nil {
-			return err
+			k.PluginAPI.Log.Error("Failed to get existing group memberships",
+				"user_id", user.Id,
+				"error", err)
+			if k.LockOutUsersOnRemovalFailure {
+				return err
+			}
+			existingGroupMemberships = []*mmModel.Group{}
 		}
 
 		if len(existingGroupMemberships) > 0 {
 			teamsToLeave := make(map[string]mmModel.GroupSyncable)
 			channelsToLeave := make(map[string]mmModel.GroupSyncable)
 			for _, group := range existingGroupMemberships {
-				if _, err = k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to remove user from group",
-						"user_id", user.Id,
-						"group_id", group.Id,
-						"error", err)
-					continue
-				}
-				if err := k.getSyncableTeamsForRemoval(group.Id, teamsToLeave); err != nil {
+				if err = k.getSyncableTeamsForRemoval(group.Id, teamsToLeave); err != nil {
 					k.PluginAPI.Log.Error("Failed to get teams for removal",
 						"group_id", group.Id,
 						"error", err)
 				}
-				if err := k.getSyncableChannelsForRemoval(group.Id, channelsToLeave); err != nil {
+				if err = k.getSyncableChannelsForRemoval(group.Id, channelsToLeave); err != nil {
 					k.PluginAPI.Log.Error("Failed to get channels for removal",
 						"group_id", group.Id,
 						"error", err)
 				}
 			}
-			channelID := k.removeUserFromChannels(channelsToLeave, user)
-			if channelID != "" {
-				// We need to restore the group membership because the user was removed from the group but not the channel.
-				// Next login if they aren't part of the group, they will be removed from the channel.
-				// If this record doesn't exist, the system won't know to remove them next time
-				// Get the GroupID from channelsToLeave map.
-				groupID := channelsToLeave[channelID].GroupId
-				if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to restore group membership",
-						"user_id", user.Id,
-						"group_id", groupID,
-						"error", err)
+			err = k.removeUserFromChannels(channelsToLeave, user)
+			if err != nil {
+				if k.LockOutUsersOnRemovalFailure {
+					return errors.New("failed to remove user from channel")
 				}
-				return errors.New("failed to remove user from channel")
 			}
-			teamID := k.removeUserFromTeams(teamsToLeave, user)
-			if teamID != "" {
-				// We need to restore the group membership because the user was removed from the group but not the team.
-				// Next login if they aren't part of the group, they will be removed from the team.
-				// If this record doesn't exist, the system won't know to remove them next time
-				// Get the GroupID from teamsToLeave map.
-				groupID := teamsToLeave[teamID].GroupId
-				if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
-					k.PluginAPI.Log.Error("Failed to restore group membership",
-						"user_id", user.Id,
-						"group_id", groupID,
-						"error", err)
+			err = k.removeUserFromTeams(teamsToLeave, user)
+			if err != nil {
+				if k.LockOutUsersOnRemovalFailure {
+					return errors.New("failed to remove user from team")
 				}
-				return errors.New("failed to remove user from team")
+			}
+			for _, group := range existingGroupMemberships {
+				if _, err = k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
+					k.PluginAPI.Log.Error("Failed to remove user from group",
+						"user_id", user.Id,
+						"group_id", group.Id,
+						"error", err)
+					if k.LockOutUsersOnRemovalFailure {
+						return errors.New("failed to remove user from group")
+					}
+				}
 			}
 		}
 		return nil
@@ -532,24 +538,30 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 	existingGroupMemberships, err := k.GetExistingGroupMemberships(user.Id)
 	if err != nil {
-		return err
+		k.PluginAPI.Log.Error("Failed to get existing group memberships",
+			"user_id", user.Id,
+			"error", err)
+		if k.LockOutUsersOnRemovalFailure {
+			return err
+		}
+		existingGroupMemberships = []*mmModel.Group{}
 	}
 
-	removedFromGroups, activeGroups := k.ProcessMembershipChanges(user, existingGroupMemberships, activeSamlAssertionGroups)
+	groupsForRemoval, activeGroups := k.GetGroupsForRemovalAndActiveGroups(user, existingGroupMemberships, activeSamlAssertionGroups)
 
 	proposedChannelsToLeave := make(map[string]mmModel.GroupSyncable)
 	finalChannelsToJoin := make(map[string]mmModel.GroupSyncable)
 
 	proposedTeamsToLeave := make(map[string]mmModel.GroupSyncable)
 	finalTeamsToJoin := make(map[string]mmModel.GroupSyncable)
-	if len(removedFromGroups) > 0 {
-		for _, groupID := range removedFromGroups {
-			if err := k.getSyncableTeamsForRemoval(groupID, proposedTeamsToLeave); err != nil {
+	if len(groupsForRemoval) > 0 {
+		for _, groupID := range groupsForRemoval {
+			if err = k.getSyncableTeamsForRemoval(groupID, proposedTeamsToLeave); err != nil {
 				k.PluginAPI.Log.Error("Failed to get teams for removal",
 					"group_id", groupID,
 					"error", err)
 			}
-			if err := k.getSyncableChannelsForRemoval(groupID, proposedChannelsToLeave); err != nil {
+			if err = k.getSyncableChannelsForRemoval(groupID, proposedChannelsToLeave); err != nil {
 				k.PluginAPI.Log.Error("Failed to get channels for removal",
 					"group_id", groupID,
 					"error", err)
@@ -560,12 +572,12 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	// Process all active groups (both remaining and newly added)
 	if len(activeGroups) > 0 {
 		for _, groupID := range activeGroups {
-			if err := k.getSyncableTeamsForAddition(groupID, finalTeamsToJoin); err != nil {
+			if err = k.getSyncableTeamsForAddition(groupID, finalTeamsToJoin); err != nil {
 				k.PluginAPI.Log.Error("Failed to get teams for addition",
 					"group_id", groupID,
 					"error", err)
 			}
-			if err := k.getSyncableChannelsForAddition(groupID, finalChannelsToJoin); err != nil {
+			if err = k.getSyncableChannelsForAddition(groupID, finalChannelsToJoin); err != nil {
 				k.PluginAPI.Log.Error("Failed to get channels for removal",
 					"group_id", groupID,
 					"error", err)
@@ -590,35 +602,29 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			finalChannelsToLeave[channelID] = groupSyncable
 		}
 	}
-	channelID := k.removeUserFromChannels(finalChannelsToLeave, user)
-	if channelID != "" {
-		// We need to restore the group membership because the user was removed from the group but not the channel.
-		// Next login if they aren't part of the group, they will be removed from the channel.
-		// If this record doesn't exist, the system won't know to remove them enxt time
-		// Get the GroupID from finalChannelsToLeave map.
-		groupID := finalChannelsToLeave[channelID].GroupId
-		if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
-			k.PluginAPI.Log.Error("Failed to restore group membership",
-				"user_id", user.Id,
-				"group_id", groupID,
-				"error", err)
+	err = k.removeUserFromChannels(finalChannelsToLeave, user)
+	if err != nil {
+		if k.LockOutUsersOnRemovalFailure {
+			return errors.New("failed to remove user from channel")
 		}
-		return errors.New("failed to remove user from channel")
 	}
-	teamID := k.removeUserFromTeams(finalTeamsToLeave, user)
-	if teamID != "" {
-		// We need to restore the group membership because the user was removed from the group but not the team.
-		// Next login if they aren't part of the group, they will be removed from the team.
-		// If this record doesn't exist, the system won't know to remove them enxt time
-		// Get the GroupID from finalChannelsToLeave map.
-		groupID := finalTeamsToLeave[channelID].GroupId
-		if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
-			k.PluginAPI.Log.Error("Failed to restore group membership",
-				"user_id", user.Id,
-				"group_id", groupID,
-				"error", err)
+	err = k.removeUserFromTeams(finalTeamsToLeave, user)
+	if err != nil {
+		if k.LockOutUsersOnRemovalFailure {
+			return errors.New("failed to remove user from team")
 		}
-		return errors.New("failed to remove user from team")
+	}
+	err = k.RemoveUserFromGroups(groupsForRemoval, user)
+	if err != nil {
+		if k.LockOutUsersOnRemovalFailure {
+			return errors.New("failed to remove user from group")
+		}
+	}
+	err = k.AddUserToGroups(activeGroups, user)
+	if err != nil {
+		if k.LockOutUsersOnRemovalFailure {
+			return errors.New("failed to add user to group")
+		}
 	}
 	k.addUserToTeams(finalTeamsToJoin, user)
 	k.addUserToChannels(finalChannelsToJoin, user)
@@ -626,14 +632,16 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	return nil
 }
 
-func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.GroupSyncable, user *mmModel.User) string {
+func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.GroupSyncable, user *mmModel.User) error {
 	for teamID := range teamsToLeave {
 		team, err := k.PluginAPI.Team.Get(teamID)
 		if err != nil {
 			k.PluginAPI.Log.Error("Failed to get team",
 				"team_id", teamID,
 				"error", err)
-			continue
+			if k.LockOutUsersOnRemovalFailure {
+				return err
+			}
 		}
 
 		// Don't remove user from the team if it's not group constrained.
@@ -652,7 +660,7 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.Gro
 					"team_id", teamID,
 					"error", err)
 				if k.LockOutUsersOnRemovalFailure {
-					return teamID
+					return err
 				}
 			}
 			continue
@@ -665,13 +673,13 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.Gro
 					"team_id", teamID,
 					"error", err)
 				if k.LockOutUsersOnRemovalFailure {
-					return teamID
+					return err
 				}
 			}
 		}
 	}
 
-	return ""
+	return nil
 }
 
 // addUserToTeams adds a user to all teams associated with a group
@@ -702,7 +710,7 @@ func (k *KeycloakClient) addUserToTeams(teamsToJoin map[string]mmModel.GroupSync
 }
 
 // removeUserFromChannels removes a user from all channels associated with a group
-func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmModel.GroupSyncable, user *mmModel.User) string {
+func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmModel.GroupSyncable, user *mmModel.User) error {
 	for channelID := range channelsToLeave {
 		_, err := k.PluginAPI.Channel.GetMember(channelID, user.Id)
 		if err != nil {
@@ -715,7 +723,7 @@ func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmMod
 					"channel_id", channelID,
 					"error", err)
 				if k.LockOutUsersOnRemovalFailure {
-					return channelID
+					return err
 				}
 			}
 			continue
@@ -727,11 +735,11 @@ func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmMod
 				"channel_id", channelID,
 				"error", err)
 			if k.LockOutUsersOnRemovalFailure {
-				return channelID
+				return err
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 // addUserToChannels adds a user to all channels associated with a group
