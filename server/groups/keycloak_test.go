@@ -380,6 +380,8 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
 
+		api.On("LogDebug", "No groups found in SAML assertion").Return()
+
 		// Mock GetGroups to return existing groups
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
 			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
@@ -402,6 +404,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(true)}, nil)
 		api.On("GetTeamMember", "team1", "user1").Return(&mmModel.TeamMember{TeamId: "team1", DeleteAt: 0}, nil)
 		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team1", "user_id", "user1").Return()
 
 		// Mock channel syncables
 		api.On("GetGroupSyncables", "group1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
@@ -410,9 +413,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupSyncables", "group2", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
-
-		// Mock logging
-		api.On("LogDebug", mock.Anything).Return()
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -775,8 +776,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Return non Group contrained team for team2, user should not be removed from it
 		api.On("GetTeam", "team2").Return(&mmModel.Team{Id: "team2", GroupConstrained: nil}, nil)
 		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team1", "user_id", "user1").Return()
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -950,8 +953,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock team member creation only for AutoAdd=true teams
 		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team1", "user_id", "user1").Return()
 		api.On("GetTeamMember", "team3", "user1").Return(&mmModel.TeamMember{TeamId: "team1", DeleteAt: 1234}, nil)
 		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team3", "user_id", "user1").Return()
 
 		// Mock GetGroupSyncables for channels (empty)
 		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
@@ -1026,8 +1031,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock channel member creation only for AutoAdd=true channels
 		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel1", "user_id", "user1").Return()
 		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel3", "user_id", "user1").Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -1089,6 +1096,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeam", "team-deleted").Return(&mmModel.Team{Id: "team-deleted", GroupConstrained: mmModel.NewPointer(false)}, nil) // Non-group constrained team, don't remove them
 		api.On("GetChannelMember", "channel-deleted", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel-deleted"}, nil)
 		api.On("DeleteChannelMember", "channel-deleted", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel-deleted", "user_id", "user1").Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -1165,8 +1173,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		// Mock team/channel member creation only for AutoAdd=true
 		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team1", "user_id", "user1").Return()
 		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel1", "user_id", "user1").Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -1258,13 +1268,17 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeamMember", "team2", "user1").Return(&mmModel.TeamMember{TeamId: "team2", DeleteAt: 0}, nil)
 		api.On("GetTeamMember", "team3", "user1").Return(&mmModel.TeamMember{TeamId: "team3", DeleteAt: 0}, nil)
 		api.On("DeleteTeamMember", "team2", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team2", "user_id", "user1").Return()
 		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team3", "user_id", "user1").Return()
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("GetChannelMember", "channel2", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel2"}, nil)
 		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("LogDebug", "User has already left the channel", "channel_id", "channel3", "user_id", "user1").Return()
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
 		api.On("DeleteChannelMember", "channel2", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel2", "user_id", "user1").Return()
 
 		// Mock logging
 		api.On("LogDebug", mock.Anything).Return()
@@ -1329,17 +1343,23 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeamMember", "team1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("GetTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("GetTeamMember", "team3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
-		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil)                                                  // Success
+		api.On("CreateTeamMember", "team1", "user1").Return(nil, nil) // Success
+		api.On("LogDebug", "Adding user to team", "team_id", "team1", "user_id", "user1").Return()
 		api.On("CreateTeamMember", "team2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to team2"}) // Failure
-		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)                                                  // Success
+		api.On("LogDebug", "Adding user to team", "team_id", "team2", "user_id", "user1").Return()
+		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil) // Success
+		api.On("LogDebug", "Adding user to team", "team_id", "team3", "user_id", "user1").Return()
 
 		// Mock channel member creation with mixed results
 		api.On("GetChannelMember", "channel1", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("GetChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
 		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
-		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil)                                                     // Success
+		api.On("AddChannelMember", "channel1", "user1").Return(nil, nil) // Success
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel1", "user_id", "user1").Return()
 		api.On("AddChannelMember", "channel2", "user1").Return(nil, &mmModel.AppError{Message: "failed to add to channel2"}) // Failure
-		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)                                                     // Success
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel2", "user_id", "user1").Return()
+		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil) // Success
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel3", "user_id", "user1").Return()
 
 		// Mock error logging
 		api.On("LogError", "Failed to add user to team",
@@ -1407,9 +1427,12 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeamMember", "team2", "user1").Return(&mmModel.TeamMember{TeamId: "team2", DeleteAt: 0}, nil)
 		api.On("GetTeamMember", "team3", "user1").Return(&mmModel.TeamMember{TeamId: "team3", DeleteAt: 0}, nil)
 
-		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)                                          // Success
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil) // Success
+		api.On("LogDebug", "Removing user from team", "team_id", "team1", "user_id", "user1").Return()
 		api.On("DeleteTeamMember", "team2", "user1", "").Return(&mmModel.AppError{Message: "removal failed"}) // Failure
-		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil)                                          // Success
+		api.On("LogDebug", "Removing user from team", "team_id", "team2", "user_id", "user1").Return()
+		api.On("DeleteTeamMember", "team3", "user1", "").Return(nil) // Success
+		api.On("LogDebug", "Removing user from team", "team_id", "team3", "user_id", "user1").Return()
 
 		// Mock error logging
 		api.On("LogError", "Failed to remove user from team",
@@ -1469,9 +1492,12 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("GetChannelMember", "channel2", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel2"}, nil)
 		api.On("GetChannelMember", "channel3", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel3"}, nil)
-		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)                                          // Success
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil) // Success
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
 		api.On("DeleteChannelMember", "channel2", "user1").Return(&mmModel.AppError{Message: "removal failed"}) // Failure
-		api.On("DeleteChannelMember", "channel3", "user1").Return(nil)                                          // Success
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel2", "user_id", "user1").Return()
+		api.On("DeleteChannelMember", "channel3", "user1").Return(nil) // Success
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel3", "user_id", "user1").Return()
 
 		// Mock error logging
 		api.On("LogError", "Failed to remove user from channel",
@@ -1677,8 +1703,11 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetTeamMember", "team5", "user1").Return(&mmModel.TeamMember{TeamId: "team5", DeleteAt: 123241}, nil) // Was previously a member
 
 		api.On("DeleteTeamMember", "team2", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team2", "user_id", "user1").Return()
 		api.On("CreateTeamMember", "team3", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team3", "user_id", "user1").Return()
 		api.On("CreateTeamMember", "team5", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team5", "user_id", "user1").Return()
 
 		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
 		api.On("GetChannelMember", "channel2", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel2"}, nil)
@@ -1687,8 +1716,11 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetChannelMember", "channel5", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel5"}, nil)
 
 		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
 		api.On("DeleteChannelMember", "channel2", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel2", "user_id", "user1").Return()
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel3", "user_id", "user1").Return()
 		api.On("LogError", "Failed to get channel member", "user_id", "user1", "channel_id", "channel4", "error", mock.Anything).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
@@ -1717,11 +1749,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
 	mockGoCloak := mocks.NewMockGoCloak(ctrl)
 	mockKVStore := kvMocks.NewMockKVStore(ctrl)
 	api := &plugintest.API{}
-
 	client := &groups.KeycloakClient{
 		Client:       mockGoCloak,
 		Realm:        "test-realm",
@@ -1730,29 +1760,22 @@ func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
 		Kvstore:      mockKVStore,
 		PluginAPI:    pluginapi.NewClient(api, nil),
 	}
-
 	t.Run("process membership changes", func(t *testing.T) {
 		existingGroups := []*mmModel.Group{
 			{Id: "group1", DisplayName: "Group 1"},
 			{Id: "group2", DisplayName: "Group 2"},
 		}
-
 		newGroups := map[string]*mmModel.Group{
 			"group2": {Id: "group2", DisplayName: "Group 2"},
 			"group3": {Id: "group3", DisplayName: "Group 3"},
 		}
-
 		// Mock DeleteMember for removed group
 		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
-
 		// Mock UpsertMember for new group
 		api.On("UpsertGroupMember", "group3", "user1").Return(nil, nil)
-
 		removed, active := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroups)
-
 		assert.Contains(t, removed, "group1")
 		assert.Len(t, active, 2)
-
 		api.AssertExpectations(t)
 	})
 }
