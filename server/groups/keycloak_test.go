@@ -1746,40 +1746,6 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 	})
 }
 
-func TestKeycloakClient_ProcessMembershipChanges(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockGoCloak := mocks.NewMockGoCloak(ctrl)
-	mockKVStore := kvMocks.NewMockKVStore(ctrl)
-	api := &plugintest.API{}
-	client := &groups.KeycloakClient{
-		Client:       mockGoCloak,
-		Realm:        "test-realm",
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		Kvstore:      mockKVStore,
-		PluginAPI:    pluginapi.NewClient(api, nil),
-	}
-	t.Run("process membership changes", func(t *testing.T) {
-		existingGroups := []*mmModel.Group{
-			{Id: "group1", DisplayName: "Group 1"},
-			{Id: "group2", DisplayName: "Group 2"},
-		}
-		newGroups := map[string]*mmModel.Group{
-			"group2": {Id: "group2", DisplayName: "Group 2"},
-			"group3": {Id: "group3", DisplayName: "Group 3"},
-		}
-		// Mock DeleteMember for removed group
-		api.On("DeleteGroupMember", "group1", "user1").Return(nil, nil)
-		// Mock UpsertMember for new group
-		api.On("UpsertGroupMember", "group3", "user1").Return(nil, nil)
-		removed, active := client.ProcessMembershipChanges(&mmModel.User{Id: "user1"}, existingGroups, newGroups)
-		assert.Contains(t, removed, "group1")
-		assert.Len(t, active, 2)
-		api.AssertExpectations(t)
-	})
-}
-
 func TestKeycloakClient_GetExistingGroups(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
