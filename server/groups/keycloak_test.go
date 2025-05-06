@@ -1721,7 +1721,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("LogDebug", "Removing user from channel", "channel_id", "channel2", "user_id", "user1").Return()
 		api.On("AddChannelMember", "channel3", "user1").Return(nil, nil)
 		api.On("LogDebug", "Adding user to channel", "channel_id", "channel3", "user_id", "user1").Return()
-		api.On("LogError", "Failed to remove user from channel, unable to get channel member", "user_id", "user1", "channel_id", "channel4", "error", mock.Anything).Return()
+		api.On("LogError", "Failed to add user to channel, unable to get channel member", "user_id", "user1", "channel_id", "channel4", "error", mock.Anything).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
