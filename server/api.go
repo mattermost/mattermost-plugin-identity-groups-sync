@@ -329,23 +329,10 @@ func (p *Plugin) CheckSyncJobRunning(w http.ResponseWriter, r *http.Request) {
 		p.respondWithError(w, http.StatusInternalServerError, "Failed to list scheduled jobs")
 		return
 	}
-	if len(jobs) > 0 {
-		response := struct {
-			Running bool `json:"running"`
-		}{
-			Running: true,
-		}
-
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			p.API.LogError("Failed to write response", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
 	response := struct {
 		Running bool `json:"running"`
 	}{
-		Running: false,
+		Running: len(jobs) > 0,
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
