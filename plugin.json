@@ -80,6 +80,14 @@
                 "type": "text",
                 "help_text": "The SAML assertion attribute that contains the user's groups.",
                 "placeholder": "Enter the groups attribute name"
+            },
+            {
+                "key": "RunMembershipJob",
+                "display_name": "",
+                "type": "custom",
+                "help_text": "",
+                "placeholder": "",
+                "default": null
             }
         ]
     }
