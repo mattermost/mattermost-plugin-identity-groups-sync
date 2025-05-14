@@ -298,30 +298,34 @@ func (k *KeycloakClient) GetExistingGroupMemberships(userID string) ([]*mmModel.
 	return existingGroups, nil
 }
 
-func (k *KeycloakClient) GetGroupsForRemovalAndActiveGroups(user *mmModel.User, existingGroupMemberships []*mmModel.Group, activeSamlAssertionGroups map[string]*mmModel.Group) ([]string, []string) {
-	var groupsForRemoval []string
-	activeGroups := make([]string, 0)
+// GetGroupsForRemovalAndActiveGroups returns the groups the user should be removed from, groups user should be added to, and groups the user will remain in.
+func (k *KeycloakClient) GetGroupsForRemovalAndActiveGroups(user *mmModel.User, existingGroupMemberships []*mmModel.Group, activeSamlAssertionGroups map[string]*mmModel.Group) ([]string, []string, []string) {
+	groupsForRemoval := make([]string, 0)
+	groupsForAddition := make([]string, 0)
+	groupsForRetention := make([]string, 0)
 
-	// Create map of existing group IDs and process removals in one pass
+	// Create map of existing group IDs so we can check for removals and retentions
 	existingGroupIDs := make(map[string]bool)
 	for _, group := range existingGroupMemberships {
 		existingGroupIDs[group.Id] = true
 		if _, exists := activeSamlAssertionGroups[group.Id]; !exists {
+			// User is not in the group anymore, mark for removal
 			groupsForRemoval = append(groupsForRemoval, group.Id)
 		} else {
-			activeGroups = append(activeGroups, group.Id)
+			// User is still in the group, mark for retention
+			groupsForRetention = append(groupsForRetention, group.Id)
 		}
 	}
 
 	// Process additions
 	for groupID := range activeSamlAssertionGroups {
 		if !existingGroupIDs[groupID] {
-			// Add the newly added group to activeGroups
-			activeGroups = append(activeGroups, groupID)
+			// User is not in the group, mark for addition
+			groupsForAddition = append(groupsForAddition, groupID)
 		}
 	}
 
-	return groupsForRemoval, activeGroups
+	return groupsForRemoval, groupsForAddition, groupsForRetention
 }
 
 func (k *KeycloakClient) RemoveUserFromGroups(groupIDs []string, user *mmModel.User) error {
@@ -338,32 +342,25 @@ func (k *KeycloakClient) RemoveUserFromGroups(groupIDs []string, user *mmModel.U
 	}
 	return nil
 }
-func (k *KeycloakClient) AddUserToGroups(groupIDs []string, user *mmModel.User) error {
+func (k *KeycloakClient) AddUserToGroups(groupIDs []string, user *mmModel.User) {
 	for _, groupID := range groupIDs {
 		if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
 			k.PluginAPI.Log.Error("Failed to add user to group",
 				"user_id", user.Id,
 				"group_id", groupID,
 				"error", err)
-			if k.LockOutUsersOnRemovalFailure {
-				return err
-			}
 		}
 	}
-	return nil
 }
 
 // getSyncableTeamsForAddition adds team IDs that the user should be added to into the provided map
 func (k *KeycloakClient) getSyncableTeamsForAddition(groupID string, teamsToAdd map[string]mmModel.GroupSyncable) error {
 	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
 	if err != nil {
-		k.PluginAPI.Log.Error("Failed to get group teams",
+		k.PluginAPI.Log.Error("Failed to get group teams for addition",
 			"group_id", groupID,
 			"error", err)
-		if k.LockOutUsersOnRemovalFailure {
-			return errors.Wrap(err, "failed to get group teams")
-		}
-		return nil
+		return errors.Wrap(err, "failed to get group teams")
 	}
 
 	for _, teamSyncable := range teamSyncables {
@@ -379,13 +376,10 @@ func (k *KeycloakClient) getSyncableTeamsForAddition(groupID string, teamsToAdd 
 func (k *KeycloakClient) getSyncableTeamsForRemoval(groupID string, teamsToRemove map[string]mmModel.GroupSyncable) error {
 	teamSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeTeam)
 	if err != nil {
-		k.PluginAPI.Log.Error("Failed to get group teams",
+		k.PluginAPI.Log.Error("Failed to get group teams for removal",
 			"group_id", groupID,
 			"error", err)
-		if k.LockOutUsersOnRemovalFailure {
-			return errors.Wrap(err, "failed to get group teams")
-		}
-		return nil
+		return errors.Wrap(err, "failed to get group teams")
 	}
 
 	for _, teamSyncable := range teamSyncables {
@@ -399,13 +393,10 @@ func (k *KeycloakClient) getSyncableTeamsForRemoval(groupID string, teamsToRemov
 func (k *KeycloakClient) getSyncableChannelsForAddition(groupID string, channelsToAdd map[string]mmModel.GroupSyncable) error {
 	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
 	if err != nil {
-		k.PluginAPI.Log.Error("Failed to get group channels",
+		k.PluginAPI.Log.Error("Failed to get group channels for addition",
 			"group_id", groupID,
 			"error", err)
-		if k.LockOutUsersOnRemovalFailure {
-			return errors.Wrap(err, "failed to get group channels")
-		}
-		return nil
+		return errors.Wrap(err, "failed to get group channels")
 	}
 
 	for _, channelSyncable := range channelSyncables {
@@ -421,13 +412,10 @@ func (k *KeycloakClient) getSyncableChannelsForAddition(groupID string, channels
 func (k *KeycloakClient) getSyncableChannelsForRemoval(groupID string, channelsToRemove map[string]mmModel.GroupSyncable) error {
 	channelSyncables, err := k.PluginAPI.Group.GetSyncables(groupID, mmModel.GroupSyncableTypeChannel)
 	if err != nil {
-		k.PluginAPI.Log.Error("Failed to get group channels",
+		k.PluginAPI.Log.Error("Failed to get group channels for removal",
 			"group_id", groupID,
 			"error", err)
-		if k.LockOutUsersOnRemovalFailure {
-			return errors.Wrap(err, "failed to get group channels")
-		}
-		return nil
+		return errors.Wrap(err, "failed to get group channels")
 	}
 
 	for _, channelSyncable := range channelSyncables {
@@ -478,25 +466,25 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			for _, group := range existingGroupMemberships {
 				if err = k.getSyncableTeamsForRemoval(group.Id, teamsToLeave); err != nil {
 					if k.LockOutUsersOnRemovalFailure {
-						return errors.New("failed to get teams for removal")
+						return err
 					}
 				}
 				if err = k.getSyncableChannelsForRemoval(group.Id, channelsToLeave); err != nil {
 					if k.LockOutUsersOnRemovalFailure {
-						return errors.New("failed to get channels for removal")
+						return err
 					}
 				}
 			}
 			err = k.removeUserFromChannels(channelsToLeave, user)
 			if err != nil {
 				if k.LockOutUsersOnRemovalFailure {
-					return errors.New("failed to remove user from channel")
+					return err
 				}
 			}
 			err = k.removeUserFromTeams(teamsToLeave, user)
 			if err != nil {
 				if k.LockOutUsersOnRemovalFailure {
-					return errors.New("failed to remove user from team")
+					return err
 				}
 			}
 			for _, group := range existingGroupMemberships {
@@ -571,7 +559,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		existingGroupMemberships = []*mmModel.Group{}
 	}
 
-	groupsForRemoval, activeGroups := k.GetGroupsForRemovalAndActiveGroups(user, existingGroupMemberships, activeSamlAssertionGroups)
+	groupsForRemoval, groupsForAddition, groupsForRetention := k.GetGroupsForRemovalAndActiveGroups(user, existingGroupMemberships, activeSamlAssertionGroups)
 
 	proposedChannelsToLeave := make(map[string]mmModel.GroupSyncable)
 	finalChannelsToJoin := make(map[string]mmModel.GroupSyncable)
@@ -582,20 +570,28 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		for _, groupID := range groupsForRemoval {
 			if err = k.getSyncableTeamsForRemoval(groupID, proposedTeamsToLeave); err != nil {
 				if k.LockOutUsersOnRemovalFailure {
-					return errors.New("failed to get teams for removal")
+					return err
 				}
 			}
 			if err = k.getSyncableChannelsForRemoval(groupID, proposedChannelsToLeave); err != nil {
 				if k.LockOutUsersOnRemovalFailure {
-					return errors.New("failed to get channels for removal")
+					return err
 				}
 			}
 		}
 	}
 
-	// Process all active groups (both remaining and newly added)
-	if len(activeGroups) > 0 {
-		for _, groupID := range activeGroups {
+	// Get the syncables for new groups
+	if len(groupsForAddition) > 0 {
+		for _, groupID := range groupsForAddition {
+			_ = k.getSyncableTeamsForAddition(groupID, finalTeamsToJoin)
+			_ = k.getSyncableChannelsForAddition(groupID, finalChannelsToJoin)
+		}
+	}
+
+	// Get the syncables for groups that the user will remain in
+	if len(groupsForRetention) > 0 {
+		for _, groupID := range groupsForRetention {
 			_ = k.getSyncableTeamsForAddition(groupID, finalTeamsToJoin)
 			_ = k.getSyncableChannelsForAddition(groupID, finalChannelsToJoin)
 		}
@@ -621,27 +617,22 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	err = k.removeUserFromChannels(finalChannelsToLeave, user)
 	if err != nil {
 		if k.LockOutUsersOnRemovalFailure {
-			return errors.New("failed to remove user from channel")
+			return err
 		}
 	}
 	err = k.removeUserFromTeams(finalTeamsToLeave, user)
 	if err != nil {
 		if k.LockOutUsersOnRemovalFailure {
-			return errors.New("failed to remove user from team")
+			return err
 		}
 	}
 	err = k.RemoveUserFromGroups(groupsForRemoval, user)
 	if err != nil {
 		if k.LockOutUsersOnRemovalFailure {
-			return errors.New("failed to remove user from group")
+			return err
 		}
 	}
-	err = k.AddUserToGroups(activeGroups, user)
-	if err != nil {
-		if k.LockOutUsersOnRemovalFailure {
-			return errors.New("failed to add user to group")
-		}
-	}
+	k.AddUserToGroups(groupsForAddition, user)
 	k.addUserToTeams(finalTeamsToJoin, user)
 	k.addUserToChannels(finalChannelsToJoin, user)
 

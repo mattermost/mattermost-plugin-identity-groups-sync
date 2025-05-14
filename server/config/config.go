@@ -14,7 +14,7 @@ type Configuration struct {
 	KeycloakHost                 string `json:"keycloakhost"`
 	KeycloakGroupsAttribute      string `json:"keycloakgroupsattribute"`
 	EncryptionKey                string `json:"encryptionkey"`
-	LockOutUsersOnRemovalFailure bool   `json:"lockoutuseronremovalfailure"`
+	LockOutUsersOnRemovalFailure bool   `json:"lockoutusersonremovalfailure"`
 }
 
 // KeycloakConfig contains all Keycloak-specific configuration
