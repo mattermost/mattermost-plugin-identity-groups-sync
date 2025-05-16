@@ -458,7 +458,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			if k.FailLoginOnGroupSyncError {
 				return err
 			}
-			existingGroupMemberships = []*mmModel.Group{}
+			return nil
 		}
 
 		if len(existingGroupMemberships) > 0 {
