@@ -619,7 +619,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 
 	// Get the syncables for new group memberships.
 	// There could be cases where the user was removed from a team or channel but is being added back to the same team or channel.
-	// We could have used groupsForAddition instead of newGroupMemberships to get the syncables but then you can end up in a situation where the user fails to be added to a group but is succesfully added to the team/channel.
+	// We could have used groupsForAddition instead of newGroupMemberships to get the syncables but then you can end up in a situation where the user fails to be added to a group but is successfully added to the team/channel.
 	// This is because the group membership can fail to be added but the syncable membership can still be added.
 	if len(newGroupMemberships) > 0 {
 		for _, groupID := range newGroupMemberships {
