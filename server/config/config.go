@@ -7,23 +7,25 @@ import (
 // Configuration captures the plugin's external configuration as exposed in the Mattermost server
 // configuration, as well as values computed from the configuration.
 type Configuration struct {
-	GroupsProvider          string `json:"groupsprovider"`
-	KeycloakRealm           string `json:"keycloakrealm"`
-	KeycloakClientID        string `json:"keycloakclientid"`
-	KeycloakClientSecret    string `json:"keycloakclientsecret"`
-	KeycloakHost            string `json:"keycloakhost"`
-	KeycloakGroupsAttribute string `json:"keycloakgroupsattribute"`
-	EncryptionKey           string `json:"encryptionkey"`
+	GroupsProvider            string `json:"groupsprovider"`
+	KeycloakRealm             string `json:"keycloakrealm"`
+	KeycloakClientID          string `json:"keycloakclientid"`
+	KeycloakClientSecret      string `json:"keycloakclientsecret"`
+	KeycloakHost              string `json:"keycloakhost"`
+	KeycloakGroupsAttribute   string `json:"keycloakgroupsattribute"`
+	EncryptionKey             string `json:"encryptionkey"`
+	FailLoginOnGroupSyncError bool   `json:"failloginongroupsyncerror"`
 }
 
 // KeycloakConfig contains all Keycloak-specific configuration
 type KeycloakConfig struct {
-	Host            string
-	Realm           string
-	ClientID        string
-	ClientSecret    string
-	GroupsAttribute string
-	EncryptionKey   string
+	Host                      string
+	Realm                     string
+	ClientID                  string
+	ClientSecret              string
+	GroupsAttribute           string
+	EncryptionKey             string
+	FailLoginOnGroupSyncError bool
 }
 
 // ToMap converts the configuration to a map
@@ -44,12 +46,13 @@ func (c *Configuration) ToMap() (map[string]interface{}, error) {
 // GetKeycloakConfig returns all Keycloak-related configuration as a single struct
 func (c *Configuration) GetKeycloakConfig() KeycloakConfig {
 	return KeycloakConfig{
-		Host:            c.KeycloakHost,
-		Realm:           c.KeycloakRealm,
-		ClientID:        c.KeycloakClientID,
-		ClientSecret:    c.KeycloakClientSecret,
-		GroupsAttribute: c.KeycloakGroupsAttribute,
-		EncryptionKey:   c.EncryptionKey,
+		Host:                      c.KeycloakHost,
+		Realm:                     c.KeycloakRealm,
+		ClientID:                  c.KeycloakClientID,
+		ClientSecret:              c.KeycloakClientSecret,
+		GroupsAttribute:           c.KeycloakGroupsAttribute,
+		EncryptionKey:             c.EncryptionKey,
+		FailLoginOnGroupSyncError: c.FailLoginOnGroupSyncError,
 	}
 }
 
@@ -61,13 +64,14 @@ func (c *Configuration) GetGroupsProvider() string {
 // Clone creates a deep copy of the configuration.
 func (c *Configuration) Clone() *Configuration {
 	var clone = &Configuration{
-		GroupsProvider:          c.GroupsProvider,
-		KeycloakRealm:           c.KeycloakRealm,
-		KeycloakClientID:        c.KeycloakClientID,
-		KeycloakClientSecret:    c.KeycloakClientSecret,
-		KeycloakHost:            c.KeycloakHost,
-		KeycloakGroupsAttribute: c.KeycloakGroupsAttribute,
-		EncryptionKey:           c.EncryptionKey,
+		GroupsProvider:            c.GroupsProvider,
+		KeycloakRealm:             c.KeycloakRealm,
+		KeycloakClientID:          c.KeycloakClientID,
+		KeycloakClientSecret:      c.KeycloakClientSecret,
+		KeycloakHost:              c.KeycloakHost,
+		KeycloakGroupsAttribute:   c.KeycloakGroupsAttribute,
+		EncryptionKey:             c.EncryptionKey,
+		FailLoginOnGroupSyncError: c.FailLoginOnGroupSyncError,
 	}
 	return clone
 }
