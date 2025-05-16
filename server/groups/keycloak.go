@@ -19,14 +19,14 @@ import (
 
 // KeycloakClient wraps the gocloak client and provides SAML-specific functionality
 type KeycloakClient struct {
-	Client                       GoCloak
-	Realm                        string
-	ClientID                     string
-	ClientSecret                 string
-	EncryptionKey                string
-	LockOutUsersOnRemovalFailure bool
-	Kvstore                      kvstore.KVStore
-	PluginAPI                    *pluginapi.Client
+	Client                    GoCloak
+	Realm                     string
+	ClientID                  string
+	ClientSecret              string
+	EncryptionKey             string
+	FailLoginOnGroupSyncError bool
+	Kvstore                   kvstore.KVStore
+	PluginAPI                 *pluginapi.Client
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
@@ -76,16 +76,16 @@ func (e *AuthError) Error() string {
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient
-func NewKeycloakClient(hostURL, realm, clientID, clientSecret, encryptionKey string, lockOutUsersOnRemovalFailure bool, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
+func NewKeycloakClient(hostURL, realm, clientID, clientSecret, encryptionKey string, failLoginOnGroupSyncError bool, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
 	return &KeycloakClient{
-		Client:                       gocloak.NewClient(hostURL),
-		Realm:                        realm,
-		ClientID:                     clientID,
-		ClientSecret:                 clientSecret,
-		EncryptionKey:                encryptionKey,
-		LockOutUsersOnRemovalFailure: lockOutUsersOnRemovalFailure,
-		Kvstore:                      kvstore,
-		PluginAPI:                    client,
+		Client:                    gocloak.NewClient(hostURL),
+		Realm:                     realm,
+		ClientID:                  clientID,
+		ClientSecret:              clientSecret,
+		EncryptionKey:             encryptionKey,
+		FailLoginOnGroupSyncError: failLoginOnGroupSyncError,
+		Kvstore:                   kvstore,
+		PluginAPI:                 client,
 	}
 }
 
@@ -335,22 +335,27 @@ func (k *KeycloakClient) RemoveUserFromGroups(groupIDs []string, user *mmModel.U
 				"user_id", user.Id,
 				"group_id", groupID,
 				"error", err)
-			if k.LockOutUsersOnRemovalFailure {
+			if k.FailLoginOnGroupSyncError {
 				return err
 			}
 		}
 	}
 	return nil
 }
-func (k *KeycloakClient) AddUserToGroups(groupIDs []string, user *mmModel.User) {
+func (k *KeycloakClient) AddUserToGroups(groupIDs []string, user *mmModel.User) []string {
+	newGroupMemberships := make([]string, 0)
 	for _, groupID := range groupIDs {
 		if _, err := k.PluginAPI.Group.UpsertMember(groupID, user.Id); err != nil {
 			k.PluginAPI.Log.Error("Failed to add user to group",
 				"user_id", user.Id,
 				"group_id", groupID,
 				"error", err)
+		} else {
+			newGroupMemberships = append(newGroupMemberships, groupID)
 		}
 	}
+
+	return newGroupMemberships
 }
 
 // addSyncableTeamsForAddition adds team IDs that the user should be added to into the provided map
@@ -450,7 +455,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			k.PluginAPI.Log.Error("Failed to get existing group memberships",
 				"user_id", user.Id,
 				"error", err)
-			if k.LockOutUsersOnRemovalFailure {
+			if k.FailLoginOnGroupSyncError {
 				return err
 			}
 			existingGroupMemberships = []*mmModel.Group{}
@@ -461,27 +466,23 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			channelsToLeave := make(map[string]mmModel.GroupSyncable)
 			for _, group := range existingGroupMemberships {
 				if err = k.addSyncableTeamsForRemoval(group.Id, teamsToLeave); err != nil {
-					if k.LockOutUsersOnRemovalFailure {
+					if k.FailLoginOnGroupSyncError {
 						return err
 					}
 				}
 				if err = k.addSyncableChannelsForRemoval(group.Id, channelsToLeave); err != nil {
-					if k.LockOutUsersOnRemovalFailure {
+					if k.FailLoginOnGroupSyncError {
 						return err
 					}
 				}
 			}
 			err = k.removeUserFromChannels(channelsToLeave, user)
 			if err != nil {
-				if k.LockOutUsersOnRemovalFailure {
-					return err
-				}
+				return err
 			}
 			err = k.removeUserFromTeams(teamsToLeave, user)
 			if err != nil {
-				if k.LockOutUsersOnRemovalFailure {
-					return err
-				}
+				return err
 			}
 			for _, group := range existingGroupMemberships {
 				if _, err = k.PluginAPI.Group.DeleteMember(group.Id, user.Id); err != nil {
@@ -489,7 +490,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 						"user_id", user.Id,
 						"group_id", group.Id,
 						"error", err)
-					if k.LockOutUsersOnRemovalFailure {
+					if k.FailLoginOnGroupSyncError {
 						return errors.New("failed to remove user from group")
 					}
 				}
@@ -549,7 +550,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		k.PluginAPI.Log.Error("Failed to get existing group memberships",
 			"user_id", user.Id,
 			"error", err)
-		if k.LockOutUsersOnRemovalFailure {
+		if k.FailLoginOnGroupSyncError {
 			return err
 		}
 		existingGroupMemberships = []*mmModel.Group{}
@@ -565,23 +566,15 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	if len(groupsForRemoval) > 0 {
 		for _, groupID := range groupsForRemoval {
 			if err = k.addSyncableTeamsForRemoval(groupID, proposedTeamsToLeave); err != nil {
-				if k.LockOutUsersOnRemovalFailure {
+				if k.FailLoginOnGroupSyncError {
 					return err
 				}
 			}
 			if err = k.addSyncableChannelsForRemoval(groupID, proposedChannelsToLeave); err != nil {
-				if k.LockOutUsersOnRemovalFailure {
+				if k.FailLoginOnGroupSyncError {
 					return err
 				}
 			}
-		}
-	}
-
-	// Get the syncables for new groups
-	if len(groupsForAddition) > 0 {
-		for _, groupID := range groupsForAddition {
-			k.addSyncableTeamsForAddition(groupID, finalTeamsToJoin)
-			k.addSyncableChannelsForAddition(groupID, finalChannelsToJoin)
 		}
 	}
 
@@ -622,7 +615,18 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 	if err != nil {
 		return err
 	}
-	k.AddUserToGroups(groupsForAddition, user)
+	newGroupMemberships := k.AddUserToGroups(groupsForAddition, user)
+
+	// Get the syncables for new group memberships.
+	// There could be cases where the user was removed from a team or channel but is being added back to the same team or channel.
+	// We could have used groupsForAddition instead of newGroupMemberships to get the syncables but then you can end up in a situation where the user fails to be added to a group but is succesfully added to the team/channel.
+	// This is because the group membership can fail to be added but the syncable membership can still be added.
+	if len(newGroupMemberships) > 0 {
+		for _, groupID := range newGroupMemberships {
+			k.addSyncableTeamsForAddition(groupID, finalTeamsToJoin)
+			k.addSyncableChannelsForAddition(groupID, finalChannelsToJoin)
+		}
+	}
 	k.addUserToTeams(finalTeamsToJoin, user)
 	k.addUserToChannels(finalChannelsToJoin, user)
 
@@ -637,7 +641,7 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.Gro
 				"user_id", user.Id,
 				"team_id", teamID,
 				"error", err)
-			if k.LockOutUsersOnRemovalFailure {
+			if k.FailLoginOnGroupSyncError {
 				return err
 			}
 			continue
@@ -658,7 +662,7 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.Gro
 					"user_id", user.Id,
 					"team_id", teamID,
 					"error", err)
-				if k.LockOutUsersOnRemovalFailure {
+				if k.FailLoginOnGroupSyncError {
 					return err
 				}
 			}
@@ -671,7 +675,7 @@ func (k *KeycloakClient) removeUserFromTeams(teamsToLeave map[string]mmModel.Gro
 					"user_id", user.Id,
 					"team_id", teamID,
 					"error", err)
-				if k.LockOutUsersOnRemovalFailure {
+				if k.FailLoginOnGroupSyncError {
 					return err
 				}
 			}
@@ -721,7 +725,7 @@ func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmMod
 					"user_id", user.Id,
 					"channel_id", channelID,
 					"error", err)
-				if k.LockOutUsersOnRemovalFailure {
+				if k.FailLoginOnGroupSyncError {
 					return err
 				}
 			}
@@ -733,7 +737,7 @@ func (k *KeycloakClient) removeUserFromChannels(channelsToLeave map[string]mmMod
 				"user_id", user.Id,
 				"channel_id", channelID,
 				"error", err)
-			if k.LockOutUsersOnRemovalFailure {
+			if k.FailLoginOnGroupSyncError {
 				return err
 			}
 		}
