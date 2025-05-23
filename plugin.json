@@ -80,6 +80,13 @@
                 "type": "text",
                 "help_text": "The SAML assertion attribute that contains the user's groups.",
                 "placeholder": "Enter the groups attribute name"
+            },
+            {
+                "key": "FailLoginOnGroupSyncError",
+                "display_name": "Fail Login on Group Sync Error",
+                "type": "bool",
+                "help_text": "Users will fail to sign in if there is a failure to remove them from a group, channel or team.",
+                "default": false
             }
         ]
     }
