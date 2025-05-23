@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -42,6 +43,8 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 	apiRouter.HandleFunc("/groups/count", p.GetGroupsCount).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/groups/link", p.LinkGroup).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/groups/unlink", p.UnlinkGroup).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/jobs/sync", p.RunSyncJob).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/jobs/sync", p.CheckSyncJobRunning).Methods(http.MethodGet)
 
 	router.ServeHTTP(w, r)
 }
@@ -264,6 +267,73 @@ func (p *Plugin) GetGroupsCount(w http.ResponseWriter, r *http.Request) {
 		Count: count,
 	}
 
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		p.API.LogError("Failed to write response", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (p *Plugin) RunSyncJob(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
+		return
+	}
+
+	jobs, err := p.ReSyncMembershipsJob.ListScheduledJobs()
+	if err != nil {
+		p.API.LogError("Failed to list scheduled jobs", "error", err)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to list scheduled jobs")
+		return
+	}
+	if len(jobs) > 0 {
+		p.respondWithError(w, http.StatusConflict, "Sync job already running")
+		return
+	}
+
+	_, err = p.ReSyncMembershipsJob.ScheduleOnce("resync_memberships", time.Now(), nil)
+	if err != nil {
+		p.API.LogError("Failed to schedule sync job", "error", err)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to schedule sync job")
+		return
+	}
+
+	response := struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}{
+		Success: true,
+		Message: "Group sync job started",
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		p.API.LogError("Failed to write response", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (p *Plugin) CheckSyncJobRunning(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Header.Get("Mattermost-User-ID")
+	if !p.client.User.HasPermissionTo(userID, model.PermissionSysconsoleWriteUserManagementGroups) {
+		p.respondWithError(w, http.StatusForbidden, "Not authorized")
+		return
+	}
+
+	jobs, err := p.ReSyncMembershipsJob.ListScheduledJobs()
+	if err != nil {
+		p.API.LogError("Failed to list scheduled jobs", "error", err)
+		p.respondWithError(w, http.StatusInternalServerError, "Failed to list scheduled jobs")
+		return
+	}
+	response := struct {
+		Running bool `json:"running"`
+	}{
+		Running: len(jobs) > 0,
+	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

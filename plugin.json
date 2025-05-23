@@ -82,6 +82,14 @@
                 "placeholder": "Enter the groups attribute name"
             },
             {
+                "key": "RunMembershipJob",
+                "display_name": "",
+                "type": "custom",
+                "help_text": "",
+                "placeholder": "",
+                "default": null
+            },
+            {
                 "key": "FailLoginOnGroupSyncError",
                 "display_name": "Fail Login on Group Sync Error",
                 "type": "bool",
