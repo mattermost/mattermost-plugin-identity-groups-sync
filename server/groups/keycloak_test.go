@@ -161,7 +161,7 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 	t.Run("successful roles retrieval", func(t *testing.T) {
 		// Test roles mapping type
 		client.MappingType = "roles"
-		
+
 		validToken := &model.JWT{
 			AccessToken:               "valid-token",
 			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
@@ -341,7 +341,7 @@ func TestKeycloakClient_GetGroup(t *testing.T) {
 	t.Run("successful role retrieval", func(t *testing.T) {
 		// Test roles mapping type
 		client.MappingType = "roles"
-		
+
 		validToken := &model.JWT{
 			AccessToken:               "valid-token",
 			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
@@ -961,7 +961,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 							{
 								Name: "roles",
 								Values: []saml2Types.AttributeValue{
-									{Value: "admin"},    // Keep this role
+									{Value: "admin"},     // Keep this role
 									{Value: "developer"}, // Add this role
 									// "manager" role removed (was in existing memberships)
 								},
