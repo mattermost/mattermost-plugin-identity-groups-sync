@@ -734,7 +734,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "group not found"})
 
 		// Mock logging
-		api.On("LogError", "Failed to get Mattermost group", "remote_id", "remote-id-1", "error", mock.Anything).Return()
+		api.On("LogDebug", "Failed to get Mattermost group", "remote_id", "remote-id-1", "error", mock.Anything).Return()
 
 		// Mock GetGroups for existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
