@@ -83,6 +83,11 @@ func (p *Plugin) OnConfigurationChange() error {
 		}
 	}
 
+	// Validate KeycloakMappingType
+	if configuration.KeycloakMappingType != "" && configuration.KeycloakMappingType != config.KeycloakMappingTypeGroups && configuration.KeycloakMappingType != config.KeycloakMappingTypeRoles {
+		return errors.New("KeycloakMappingType must be either 'groups' or 'roles'")
+	}
+
 	p.setConfiguration(configuration)
 
 	if p.client != nil {

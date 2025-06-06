@@ -110,6 +110,51 @@ func (mr *MockGoCloakMockRecorder) GetGroupsCount(arg0, arg1, arg2, arg3 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupsCount", reflect.TypeOf((*MockGoCloak)(nil).GetGroupsCount), arg0, arg1, arg2, arg3)
 }
 
+// GetRealmRole mocks base method.
+func (m *MockGoCloak) GetRealmRole(arg0 context.Context, arg1, arg2, arg3 string) (*gocloak.Role, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRealmRole", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*gocloak.Role)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRealmRole indicates an expected call of GetRealmRole.
+func (mr *MockGoCloakMockRecorder) GetRealmRole(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRealmRole", reflect.TypeOf((*MockGoCloak)(nil).GetRealmRole), arg0, arg1, arg2, arg3)
+}
+
+// GetRealmRoleByID mocks base method.
+func (m *MockGoCloak) GetRealmRoleByID(arg0 context.Context, arg1, arg2, arg3 string) (*gocloak.Role, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRealmRoleByID", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*gocloak.Role)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRealmRoleByID indicates an expected call of GetRealmRoleByID.
+func (mr *MockGoCloakMockRecorder) GetRealmRoleByID(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRealmRoleByID", reflect.TypeOf((*MockGoCloak)(nil).GetRealmRoleByID), arg0, arg1, arg2, arg3)
+}
+
+// GetRealmRoles mocks base method.
+func (m *MockGoCloak) GetRealmRoles(arg0 context.Context, arg1, arg2 string, arg3 gocloak.GetRoleParams) ([]*gocloak.Role, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRealmRoles", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]*gocloak.Role)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRealmRoles indicates an expected call of GetRealmRoles.
+func (mr *MockGoCloakMockRecorder) GetRealmRoles(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRealmRoles", reflect.TypeOf((*MockGoCloak)(nil).GetRealmRoles), arg0, arg1, arg2, arg3)
+}
+
 // LoginClient mocks base method.
 func (m *MockGoCloak) LoginClient(arg0 context.Context, arg1, arg2, arg3 string, arg4 ...string) (*gocloak.JWT, error) {
 	m.ctrl.T.Helper()

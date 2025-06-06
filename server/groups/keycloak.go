@@ -13,6 +13,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 
+	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/config"
 	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/model"
 	"github.com/mattermost/mattermost-plugin-identity-groups-sync/server/store/kvstore"
 )
@@ -23,10 +24,17 @@ type KeycloakClient struct {
 	Realm                     string
 	ClientID                  string
 	ClientSecret              string
+	MappingType               string
 	EncryptionKey             string
 	FailLoginOnGroupSyncError bool
 	Kvstore                   kvstore.KVStore
 	PluginAPI                 *pluginapi.Client
+}
+
+// NamedEntity represents a Keycloak entity with name and ID
+type NamedEntity struct {
+	Name *string
+	ID   *string
 }
 
 // executeWithRetry gets a valid token and executes the given function, retrying once with a new token if it gets a 401
@@ -76,12 +84,13 @@ func (e *AuthError) Error() string {
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient
-func NewKeycloakClient(hostURL, realm, clientID, clientSecret, encryptionKey string, failLoginOnGroupSyncError bool, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
+func NewKeycloakClient(hostURL, realm, clientID, clientSecret, mappingType, encryptionKey string, failLoginOnGroupSyncError bool, kvstore kvstore.KVStore, client *pluginapi.Client) *KeycloakClient {
 	return &KeycloakClient{
 		Client:                    gocloak.NewClient(hostURL),
 		Realm:                     realm,
 		ClientID:                  clientID,
 		ClientSecret:              clientSecret,
+		MappingType:               mappingType,
 		EncryptionKey:             encryptionKey,
 		FailLoginOnGroupSyncError: failLoginOnGroupSyncError,
 		Kvstore:                   kvstore,
@@ -130,34 +139,70 @@ func (k *KeycloakClient) Authenticate(ctx context.Context) (string, error) {
 
 // GetGroups retrieves all groups from Keycloak and converts them to Mattermost groups
 func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel.Group, error) {
+	if k.MappingType == config.KeycloakMappingTypeRoles {
+		return k.getGroupsGeneric(ctx, query, config.KeycloakMappingTypeRoles, func(ctx context.Context, token string, first, max int, search string) (interface{}, error) {
+			params := gocloak.GetRoleParams{
+				First:  &first,
+				Max:    &max,
+				Search: &search,
+			}
+			return k.Client.GetRealmRoles(ctx, token, k.Realm, params)
+		}, func(result interface{}) []*mmModel.Group {
+			keycloakRoles := result.([]*gocloak.Role)
+			mmGroups := make([]*mmModel.Group, len(keycloakRoles))
+			for i, role := range keycloakRoles {
+				mmGroups[i] = k.translateRoleToGroup(role)
+			}
+			return mmGroups
+		})
+	}
+	return k.getGroupsGeneric(ctx, query, config.KeycloakMappingTypeGroups, func(ctx context.Context, token string, first, max int, search string) (interface{}, error) {
+		params := gocloak.GetGroupsParams{
+			First:  &first,
+			Max:    &max,
+			Search: &search,
+		}
+		return k.Client.GetGroups(ctx, token, k.Realm, params)
+	}, func(result interface{}) []*mmModel.Group {
+		keycloakGroups := result.([]*gocloak.Group)
+		mmGroups := make([]*mmModel.Group, len(keycloakGroups))
+		for i, group := range keycloakGroups {
+			mmGroups[i] = k.translateGroupToGroup(group)
+		}
+		return mmGroups
+	})
+}
+
+func (k *KeycloakClient) getGroupsGeneric(ctx context.Context, query Query, entityType string, fetchFunc func(context.Context, string, int, int, string) (interface{}, error), translateFunc func(interface{}) []*mmModel.Group) ([]*mmModel.Group, error) {
 	first := query.Page
 	if first != 0 {
 		first = (query.Page * query.PerPage)
 	}
-	params := gocloak.GetGroupsParams{
-		First:  &first,
-		Max:    &query.PerPage,
-		Search: &query.Search,
-	}
+
 	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
-		return k.Client.GetGroups(reqCtx, t, k.Realm, params)
+		return fetchFunc(reqCtx, t, first, query.PerPage, query.Search)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get groups: %w", err)
+		return nil, fmt.Errorf("failed to get %s: %w", entityType, err)
 	}
 
-	keycloakGroups := result.([]*gocloak.Group)
-	mmGroups := make([]*mmModel.Group, len(keycloakGroups))
-	for i, group := range keycloakGroups {
-		mmGroups[i] = k.translateGroup(group)
-	}
-
-	return mmGroups, nil
+	return translateFunc(result), nil
 }
 
 // GetGroupsCount retrieves the total number of groups in Keycloak
 // If q is provided, it will filter the count based on the search term
 func (k *KeycloakClient) GetGroupsCount(ctx context.Context, q string) (int, error) {
+	if k.MappingType == config.KeycloakMappingTypeRoles {
+		return k.getGroupsCountFromRoles()
+	}
+	return k.getGroupsCountFromGroups(ctx, q)
+}
+
+func (k *KeycloakClient) getGroupsCountFromRoles() (int, error) {
+	return 0, fmt.Errorf("count operation is not supported when using roles mapping type")
+}
+
+func (k *KeycloakClient) getGroupsCountFromGroups(ctx context.Context, q string) (int, error) {
 	params := gocloak.GetGroupsParams{}
 	if q != "" {
 		params.Search = &q
@@ -231,8 +276,18 @@ func (k *KeycloakClient) getAuthToken(ctx context.Context) (string, error) {
 	return accessToken, nil
 }
 
-// translateGroup converts a Keycloak group to a Mattermost group
-func (k *KeycloakClient) translateGroup(group *gocloak.Group) *mmModel.Group {
+// translateRoleToGroup converts a Keycloak role to a Mattermost group
+func (k *KeycloakClient) translateRoleToGroup(role *gocloak.Role) *mmModel.Group {
+	return &mmModel.Group{
+		DisplayName:    *role.Name,
+		Source:         k.GetGroupSource(),
+		RemoteId:       role.ID,
+		AllowReference: false,
+	}
+}
+
+// translateGroupToGroup converts a Keycloak group to a Mattermost group
+func (k *KeycloakClient) translateGroupToGroup(group *gocloak.Group) *mmModel.Group {
 	return &mmModel.Group{
 		DisplayName:    *group.Name,
 		Source:         k.GetGroupSource(),
@@ -256,15 +311,31 @@ func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([
 
 // GetGroup retrieves a specific group from Keycloak by ID
 func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error) {
+	if k.MappingType == config.KeycloakMappingTypeRoles {
+		return k.getGroupGeneric(ctx, groupID, config.KeycloakMappingTypeRoles, func(ctx context.Context, token, id string) (interface{}, error) {
+			return k.Client.GetRealmRoleByID(ctx, token, k.Realm, id)
+		}, func(result interface{}) *mmModel.Group {
+			role := result.(*gocloak.Role)
+			return k.translateRoleToGroup(role)
+		})
+	}
+	return k.getGroupGeneric(ctx, groupID, config.KeycloakMappingTypeGroups, func(ctx context.Context, token, id string) (interface{}, error) {
+		return k.Client.GetGroup(ctx, token, k.Realm, id)
+	}, func(result interface{}) *mmModel.Group {
+		group := result.(*gocloak.Group)
+		return k.translateGroupToGroup(group)
+	})
+}
+
+func (k *KeycloakClient) getGroupGeneric(ctx context.Context, entityID, entityType string, fetchFunc func(context.Context, string, string) (interface{}, error), translateFunc func(interface{}) *mmModel.Group) (*mmModel.Group, error) {
 	result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
-		return k.Client.GetGroup(reqCtx, t, k.Realm, groupID)
+		return fetchFunc(reqCtx, t, entityID)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get group: %w", err)
+		return nil, fmt.Errorf("failed to get %s: %w", entityType, err)
 	}
-	group := result.(*gocloak.Group)
 
-	return k.translateGroup(group), nil
+	return translateFunc(result), nil
 }
 
 // getExistingGroups retrieves all groups the user is currently a member of
@@ -509,21 +580,40 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		if err != nil {
 			// If not in KVStore, fetch from Keycloak
 			var result interface{}
-			result, err = k.executeWithRetry(context.Background(), func(reqCtx context.Context, token string) (interface{}, error) {
-				return k.Client.GetGroupByPath(reqCtx, token, k.Realm, "/"+groupName)
-			})
-			if err != nil {
-				k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
-				continue
+			if k.MappingType == config.KeycloakMappingTypeRoles {
+				result, err = k.executeWithRetry(context.Background(), func(reqCtx context.Context, token string) (interface{}, error) {
+					return k.Client.GetRealmRole(reqCtx, token, k.Realm, groupName)
+				})
+				if err != nil {
+					k.PluginAPI.Log.Error("Failed to get role by name", "role", groupName, "error", err)
+					continue
+				}
+
+				role := result.(*gocloak.Role)
+				if role == nil || role.ID == nil {
+					k.PluginAPI.Log.Error("Role not found in Keycloak", "role", groupName)
+					continue
+				}
+
+				keycloakGroupID = *role.ID
+			} else {
+				result, err = k.executeWithRetry(context.Background(), func(reqCtx context.Context, token string) (interface{}, error) {
+					return k.Client.GetGroupByPath(reqCtx, token, k.Realm, "/"+groupName)
+				})
+				if err != nil {
+					k.PluginAPI.Log.Error("Failed to get group by path", "group", groupName, "error", err)
+					continue
+				}
+
+				group := result.(*gocloak.Group)
+				if group == nil || group.ID == nil {
+					k.PluginAPI.Log.Error("Group not found in Keycloak", "group", groupName)
+					continue
+				}
+
+				keycloakGroupID = *group.ID
 			}
 
-			group := result.(*gocloak.Group)
-			if group == nil || group.ID == nil {
-				k.PluginAPI.Log.Error("Group not found in Keycloak", "group", groupName)
-				continue
-			}
-
-			keycloakGroupID = *group.ID
 			if err = k.Kvstore.StoreKeycloakGroupID(groupName, keycloakGroupID); err != nil {
 				k.PluginAPI.Log.Error("Failed to store group mapping", "group", groupName, "error", err)
 				continue
@@ -533,7 +623,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 		var mmGroup *mmModel.Group
 		mmGroup, err = k.PluginAPI.Group.GetByRemoteID(keycloakGroupID, k.GetGroupSource())
 		if err != nil {
-			k.PluginAPI.Log.Error("Failed to get Mattermost group", "remote_id", keycloakGroupID, "error", err)
+			k.PluginAPI.Log.Debug("Failed to get Mattermost group", "remote_id", keycloakGroupID, "error", err)
 			continue
 		}
 
@@ -774,6 +864,60 @@ func (k *KeycloakClient) addUserToChannels(channelsToJoin map[string]mmModel.Gro
 }
 
 func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
+	if k.MappingType == config.KeycloakMappingTypeRoles {
+		return k.syncGroupMapFromRoles(ctx)
+	}
+	return k.syncGroupMapFromGroups(ctx)
+}
+
+func (k *KeycloakClient) syncGroupMapFromRoles(ctx context.Context) error {
+	return k.syncGroupMapGeneric(ctx, config.KeycloakMappingTypeRoles, func(ctx context.Context, token string, page, perPage int) ([]NamedEntity, error) {
+		first := page
+		if first != 0 {
+			first = (page * perPage)
+		}
+		params := gocloak.GetRoleParams{
+			First: &first,
+			Max:   &perPage,
+		}
+		result, err := k.Client.GetRealmRoles(ctx, token, k.Realm, params)
+		if err != nil {
+			return nil, err
+		}
+
+		entities := make([]NamedEntity, len(result))
+		for i, role := range result {
+			entities[i] = NamedEntity{Name: role.Name, ID: role.ID}
+		}
+		return entities, nil
+	})
+}
+
+func (k *KeycloakClient) syncGroupMapFromGroups(ctx context.Context) error {
+	return k.syncGroupMapGeneric(ctx, config.KeycloakMappingTypeGroups, func(ctx context.Context, token string, page, perPage int) ([]NamedEntity, error) {
+		first := page
+		if first != 0 {
+			first = (page * perPage)
+		}
+		params := gocloak.GetGroupsParams{
+			First: &first,
+			Max:   &perPage,
+		}
+		result, err := k.Client.GetGroups(ctx, token, k.Realm, params)
+		if err != nil {
+			return nil, err
+		}
+
+		entities := make([]NamedEntity, len(result))
+		for i, group := range result {
+			entities[i] = NamedEntity{Name: group.Name, ID: group.ID}
+		}
+		return entities, nil
+	})
+}
+
+// syncGroupMapGeneric handles the common sync logic
+func (k *KeycloakClient) syncGroupMapGeneric(ctx context.Context, entityType string, fetchFunc func(context.Context, string, int, int) ([]NamedEntity, error)) error {
 	// Get existing group mappings from KV store
 	existingGroups, err := k.Kvstore.ListKeycloakGroupIDs()
 	if err != nil {
@@ -782,48 +926,38 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 
 	// Create a map to track which groups we find in Keycloak
 	foundGroups := make(map[string]bool)
-
 	page := 0
 	perPage := 100
 
 	for {
-		first := page
-		if first != 0 {
-			first = (page * perPage)
-		}
-		// Get groups page by page
-		params := gocloak.GetGroupsParams{
-			First: &first,
-			Max:   &perPage,
-		}
-		result, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
-			return k.Client.GetGroups(reqCtx, t, k.Realm, params)
+		entities, err := k.executeWithRetry(ctx, func(reqCtx context.Context, t string) (interface{}, error) {
+			return fetchFunc(reqCtx, t, page, perPage)
 		})
 		if err != nil {
-			return fmt.Errorf("failed to sync groups: %w", err)
+			return fmt.Errorf("failed to sync %s: %w", entityType, err)
 		}
 
-		groups := result.([]*gocloak.Group)
-		if len(groups) == 0 {
-			break // No more groups to process
+		entitiesList := entities.([]NamedEntity)
+		if len(entitiesList) == 0 {
+			break // No more entities to process
 		}
 
-		// Store each group mapping individually
-		for _, group := range groups {
-			if group.Name != nil && group.ID != nil {
-				foundGroups[*group.Name] = true
+		// Store each entity mapping individually
+		for _, entity := range entitiesList {
+			if entity.Name != nil && entity.ID != nil {
+				foundGroups[*entity.Name] = true
 
 				// Check if mapping already exists with same ID
-				if existingID, exists := existingGroups[*group.Name]; !exists || existingID != *group.ID {
-					if err := k.Kvstore.StoreKeycloakGroupID(*group.Name, *group.ID); err != nil {
-						k.PluginAPI.Log.Error("Failed to store group mapping", "group", *group.Name, "error", err)
+				if existingID, exists := existingGroups[*entity.Name]; !exists || existingID != *entity.ID {
+					if err := k.Kvstore.StoreKeycloakGroupID(*entity.Name, *entity.ID); err != nil {
+						k.PluginAPI.Log.Error(fmt.Sprintf("Failed to store %s mapping", entityType), entityType, *entity.Name, "error", err)
 					}
 				}
 			}
 		}
 
 		// If we got less than perPage results, we've reached the end
-		if len(groups) < perPage {
+		if len(entitiesList) < perPage {
 			break
 		}
 
@@ -834,9 +968,9 @@ func (k *KeycloakClient) SyncGroupMap(ctx context.Context) error {
 	for groupName := range existingGroups {
 		if !foundGroups[groupName] {
 			if err := k.Kvstore.DeleteKeycloakGroupID(groupName); err != nil {
-				k.PluginAPI.Log.Error("Failed to delete stale group mapping", "group", groupName, "error", err)
+				k.PluginAPI.Log.Error(fmt.Sprintf("Failed to delete stale %s mapping", entityType), entityType, groupName, "error", err)
 			} else {
-				k.PluginAPI.Log.Debug("Deleted stale group mapping", "group", groupName)
+				k.PluginAPI.Log.Debug(fmt.Sprintf("Deleted stale %s mapping", entityType), entityType, groupName)
 			}
 		}
 	}

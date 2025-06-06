@@ -4,6 +4,12 @@ import (
 	"encoding/json"
 )
 
+// Constants for KeycloakMappingType values
+const (
+	KeycloakMappingTypeGroups = "groups"
+	KeycloakMappingTypeRoles  = "roles"
+)
+
 // Configuration captures the plugin's external configuration as exposed in the Mattermost server
 // configuration, as well as values computed from the configuration.
 type Configuration struct {
@@ -13,6 +19,7 @@ type Configuration struct {
 	KeycloakClientSecret      string `json:"keycloakclientsecret"`
 	KeycloakHost              string `json:"keycloakhost"`
 	KeycloakGroupsAttribute   string `json:"keycloakgroupsattribute"`
+	KeycloakMappingType       string `json:"keycloakmappingtype"`
 	EncryptionKey             string `json:"encryptionkey"`
 	FailLoginOnGroupSyncError bool   `json:"failloginongroupsyncerror"`
 }
@@ -24,6 +31,7 @@ type KeycloakConfig struct {
 	ClientID                  string
 	ClientSecret              string
 	GroupsAttribute           string
+	MappingType               string
 	EncryptionKey             string
 	FailLoginOnGroupSyncError bool
 }
@@ -51,6 +59,7 @@ func (c *Configuration) GetKeycloakConfig() KeycloakConfig {
 		ClientID:                  c.KeycloakClientID,
 		ClientSecret:              c.KeycloakClientSecret,
 		GroupsAttribute:           c.KeycloakGroupsAttribute,
+		MappingType:               c.KeycloakMappingType,
 		EncryptionKey:             c.EncryptionKey,
 		FailLoginOnGroupSyncError: c.FailLoginOnGroupSyncError,
 	}
@@ -70,6 +79,7 @@ func (c *Configuration) Clone() *Configuration {
 		KeycloakClientSecret:      c.KeycloakClientSecret,
 		KeycloakHost:              c.KeycloakHost,
 		KeycloakGroupsAttribute:   c.KeycloakGroupsAttribute,
+		KeycloakMappingType:       c.KeycloakMappingType,
 		EncryptionKey:             c.EncryptionKey,
 		FailLoginOnGroupSyncError: c.FailLoginOnGroupSyncError,
 	}
