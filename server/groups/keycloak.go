@@ -146,7 +146,7 @@ func (k *KeycloakClient) GetGroups(ctx context.Context, query Query) ([]*mmModel
 				Max:    &max,
 				Search: &search,
 			}
-			return k.Client.GetRealmRoles(ctx, token, k.Realm, params)
+			return k.Client.GetClientRoles(ctx, token, k.Realm, "88e48acd-0b87-4e5b-a1e0-94ba87c9471c", params)
 		}, func(result interface{}) []*mmModel.Group {
 			keycloakRoles := result.([]*gocloak.Role)
 			mmGroups := make([]*mmModel.Group, len(keycloakRoles))
@@ -313,7 +313,7 @@ func (k *KeycloakClient) GetGroupMembers(ctx context.Context, groupID string) ([
 func (k *KeycloakClient) GetGroup(ctx context.Context, groupID string) (*mmModel.Group, error) {
 	if k.MappingType == config.KeycloakMappingTypeRoles {
 		return k.getGroupGeneric(ctx, groupID, config.KeycloakMappingTypeRoles, func(ctx context.Context, token, id string) (interface{}, error) {
-			return k.Client.GetRealmRoleByID(ctx, token, k.Realm, id)
+			return k.Client.GetClientRoleByID(ctx, token, k.Realm, id)
 		}, func(result interface{}) *mmModel.Group {
 			role := result.(*gocloak.Role)
 			return k.translateRoleToGroup(role)
@@ -582,7 +582,7 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			var result interface{}
 			if k.MappingType == config.KeycloakMappingTypeRoles {
 				result, err = k.executeWithRetry(context.Background(), func(reqCtx context.Context, token string) (interface{}, error) {
-					return k.Client.GetRealmRole(reqCtx, token, k.Realm, groupName)
+					return k.Client.GetClientRole(reqCtx, token, k.Realm, "88e48acd-0b87-4e5b-a1e0-94ba87c9471c", groupName)
 				})
 				if err != nil {
 					k.PluginAPI.Log.Error("Failed to get role by name", "role", groupName, "error", err)
@@ -880,7 +880,7 @@ func (k *KeycloakClient) syncGroupMapFromRoles(ctx context.Context) error {
 			First: &first,
 			Max:   &perPage,
 		}
-		result, err := k.Client.GetRealmRoles(ctx, token, k.Realm, params)
+		result, err := k.Client.GetClientRoles(ctx, token, k.Realm, "88e48acd-0b87-4e5b-a1e0-94ba87c9471c", params)
 		if err != nil {
 			return nil, err
 		}
