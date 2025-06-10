@@ -672,7 +672,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			Return(errors.New("failed to store"))
 
 		// Mock logging
-		api.On("LogError", "Failed to store group mapping", "group", "newgroup", "error", mock.Anything).Return()
+		api.On("LogWarn", "Failed to store group mapping", "group", "newgroup", "error", mock.Anything).Return()
+
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{}, &mmModel.AppError{Message: "not found"})
+		api.On("LogDebug", "Keycloak group hasn't been linked to Mattermost yet", "remote_id", "remote-id-1", "name", "newgroup").Return()
 
 		// Mock GetGroups for existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -975,7 +978,7 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.AssertExpectations(t)
 	})
 
-	t.Run("GetGroupByRemoteID fails", func(t *testing.T) {
+	t.Run("GetGroupByRemoteID fails with a timeout", func(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
@@ -987,17 +990,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			Return("remote-id-1", nil)
 
 		// Mock GetGroupByRemoteID failure
-		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "group not found"})
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "failed to get groups", StatusCode: 504})
 
 		// Mock logging
-		api.On("LogDebug", "Failed to get Mattermost group", "remote_id", "remote-id-1", "error", mock.Anything).Return()
-
-		// Mock GetGroups for existing memberships
-		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
-			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
-			FilterHasMember: "user1",
-			IncludeArchived: true,
-		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+		api.On("LogError", "Failed to get Mattermost group by remote ID", "remote_id", "remote-id-1", "name", "group1", "error", mock.Anything).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -1015,7 +1011,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 				},
 			},
 		}, "groups")
-		assert.NoError(t, err)
+
+		// GetGroupByRemoteID returns an error if it fails with anything other than "not found"
+		assert.Error(t, err)
 		api.AssertExpectations(t)
 	})
 
@@ -1242,9 +1240,13 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 
 		// Mock GetGroupByRemoteID to return a deleted group (DeleteAt > 0)
 		api.On("GetGroupByRemoteID", "remote-id-deleted", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
-			Id:       "deleted-group-id",
-			DeleteAt: 12345, // Non-zero DeleteAt indicates the group is deleted
+			Id:          "deleted-group-id",
+			RemoteId:    mmModel.NewPointer("remote-id-deleted"),
+			DeleteAt:    12345, // Non-zero DeleteAt indicates the group is deleted
+			DisplayName: "deletedgroup",
 		}, nil)
+
+		api.On("LogDebug", "Keycloak group has been unlinked in Mattermost", "remote_id", "remote-id-deleted", "name", "deletedgroup").Return()
 
 		// Mock GetGroups for existing memberships - user is already a member of the deleted group
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{

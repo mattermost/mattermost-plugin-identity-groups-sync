@@ -615,20 +615,30 @@ func (k *KeycloakClient) HandleSAMLLogin(c *plugin.Context, user *mmModel.User, 
 			}
 
 			if err = k.Kvstore.StoreKeycloakGroupID(groupName, keycloakGroupID); err != nil {
-				k.PluginAPI.Log.Error("Failed to store group mapping", "group", groupName, "error", err)
-				continue
+				k.PluginAPI.Log.Warn("Failed to store group mapping", "group", groupName, "error", err)
 			}
 		}
 
 		var mmGroup *mmModel.Group
 		mmGroup, err = k.PluginAPI.Group.GetByRemoteID(keycloakGroupID, k.GetGroupSource())
 		if err != nil {
-			k.PluginAPI.Log.Debug("Failed to get Mattermost group", "remote_id", keycloakGroupID, "error", err)
+			if strings.ToLower(err.Error()) == "not found" {
+				k.PluginAPI.Log.Debug("Keycloak group hasn't been linked to Mattermost yet", "remote_id", keycloakGroupID, "name", groupName)
+			} else {
+				k.PluginAPI.Log.Error("Failed to get Mattermost group by remote ID",
+					"remote_id", keycloakGroupID,
+					"name", groupName,
+					"error", err)
+				if k.FailLoginOnGroupSyncError {
+					return err
+				}
+			}
 			continue
 		}
 
 		// If the group is deleted in Mattermost, skip it because activeSamlAssertionGroups should only contain active groups that you want the user to be a member of.
 		if mmGroup.DeleteAt != 0 {
+			k.PluginAPI.Log.Debug("Keycloak group has been unlinked in Mattermost", "remote_id", *mmGroup.RemoteId, "name", mmGroup.DisplayName)
 			continue
 		}
 
