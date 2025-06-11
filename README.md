@@ -12,9 +12,10 @@ If you're running an Enterprise Edition of Mattermost and don't already have a v
 
 ## Features
 
-- Sync Keycloak groups with Mattermost.
+- Sync Keycloak groups or roles with Mattermost groups.
+- Configurable mapping type: use Keycloak groups or roles as the source for Mattermost groups.
 - Sync groups with teams or channels.
-- Assign Mattermost group memberships to user's on sign in through SAML based on the Group memberships in their SAML assertion.
+- Assign Mattermost group memberships to users on sign in through SAML based on the group or role memberships in their SAML assertion.
 
 ## Requirements
 
@@ -57,19 +58,36 @@ remain members of the team even after being removed from the associated group, b
 
 These groups will not be visible to end users within Mattermost unless you enable group mentions for that particular group. Enabling group mentions allows users to @ mention groups in posts and allows them to see the current group members. Group mentions are disabled by default for each group.
 
+## Configuration Options
+
+### Keycloak Mapping Type
+
+The plugin supports two mapping types that determine how Keycloak entities are synchronized with Mattermost groups:
+
+#### Groups Mapping (Default)
+- Uses Keycloak groups as the source for Mattermost groups
+- Requires service account to have access to view Keycloak groups
+- SAML assertion should contain group names in the configured groups attribute
+
+#### Roles Mapping  
+- Uses Keycloak realm roles as the source for Mattermost groups
+- Requires service account to have the `view-realm` role to access Keycloak realm roles
+- SAML assertion should contain role names in the configured groups attribute
+- Useful when your organization uses roles instead of groups for access control
+
 ## Keycloak limitations 
 
-### Keycloak group names in SAML assertion
+### Keycloak group/role names in SAML assertion
 
-The SAML assertion for group memberships contains the name of the group, not the group ID.  
+The SAML assertion for group or role memberships contains the name of the group/role, not the ID.  
 
 ![Groups attribute](./docs/assets/saml-groups-attribute.png)
 
-This is a limitation in Keycloak, they do not support passing a group ID as an attribute value. In Mattermost we reference the Keycloak group by storing the Keycloak group ID in the UserGroups table, not by storing the group name. This is because the Keycloak group ID is immutable but groups can be renamed. 
+This is a limitation in Keycloak, they do not support passing an ID as an attribute value. In Mattermost we reference the Keycloak group or role by storing the Keycloak ID in the UserGroups table, not by storing the name. This is because the Keycloak ID is immutable but groups/roles can be renamed. 
 
-When the user logs in we have a list of keycloak group names from the SAML assertion, our UserGroups table contains the group ID. To match up SAML assertion groups to the Mattermost groups we keep a map of your Keycloak groups where the key is the Keycloak group name, and the value is the Keycloak group ID. This map is updated every hour by a job that runs in the background. If a user logs in with a new group before this job picks it up, we reach out to the keycloak server through `GET /group-by-path/{group-name}` and pull in the group information. The map saves us having to reach out to keycloak for each individual group that is in the SAML assertion. 
+When the user logs in we have a list of Keycloak group/role names from the SAML assertion, our UserGroups table contains the ID. To match up SAML assertion groups/roles to the Mattermost groups we keep a map of your Keycloak groups or roles where the key is the Keycloak group/role name, and the value is the Keycloak group/role ID. This map is updated every hour by a job that runs in the background. If a user logs in with a new group/role before this job picks it up, we reach out to the keycloak server and pull in the group or role information. The map saves us having to reach out to keycloak for each individual group/role that is in the SAML assertion. 
 
-The only limitation with keeping this map is that if 2 groups swap names with eachother and someone logs in before the background job runs, they will end up in the wrong groups. While this is an edge case that is unlikely to happen, you should be aware. 
+The only limitation with keeping this map is that if 2 groups (or 2 roles) swap names with each other and someone logs in before the background job runs, they will end up in the wrong groups. While this is an edge case that is unlikely to happen, you should be aware. 
 
 ### Group memberships from Keycloak are only synced on login
 
