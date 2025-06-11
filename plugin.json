@@ -46,6 +46,23 @@
                 "hosting": ""
             },
             {
+                "key": "KeycloakMappingType",
+                "display_name": "Mapping Type",
+                "type": "dropdown",
+                "help_text": "Choose whether to map Keycloak groups or roles to Mattermost groups.",
+                "default": "groups",
+                "options": [
+                    {
+                        "display_name": "Groups",
+                        "value": "groups"
+                    },
+                    {
+                        "display_name": "Roles",
+                        "value": "roles"
+                    }
+                ]
+            },
+            {
                 "key": "KeycloakHost",
                 "display_name": "Keycloak Host URL",
                 "type": "text",

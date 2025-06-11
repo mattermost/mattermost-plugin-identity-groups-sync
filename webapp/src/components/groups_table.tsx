@@ -22,7 +22,7 @@ interface Group {
 const GroupsTable: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [groupsMap, setGroupsMap] = useState<Map<string, Group>>(new Map());
-    const [totalCount, setTotalCount] = useState(0);
+    const [totalCount, setTotalCount] = useState<number | null>(0);
     const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
@@ -31,9 +31,14 @@ const GroupsTable: React.FC = () => {
     const perPage = 20;
 
     const fetchCount = async (search: string) => {
-        const response = await Client.getGroupsCount(search);
-        if (response.count !== undefined) {
-            setTotalCount(response.count);
+        try {
+            const response = await Client.getGroupsCount(search);
+            if (response.count !== undefined) {
+                setTotalCount(response.count);
+            }
+        } catch (err) {
+            // If count is not supported (e.g., when using roles), set to null
+            setTotalCount(null);
         }
     };
 
@@ -107,7 +112,7 @@ const GroupsTable: React.FC = () => {
     // Handle page changes
     const handlePageChange = (newPage: number) => {
         setCurrentPage(newPage);
-        fetchGroups(newPage, searchTerm, true);
+        fetchGroups(newPage, searchTerm, false);
     };
 
     // Fetch groups when component mounts
@@ -339,25 +344,47 @@ const GroupsTable: React.FC = () => {
             </table>
 
             <div className='pagination'>
-                {totalCount > 0 ? (
-                    <>
-                        <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
-                        <button
-                            disabled={currentPage === 0}
-                            onClick={() => handlePageChange(currentPage - 1)}
-                        >
-                            <i className='fa fa-chevron-left'/>
-                        </button>
-                        <button
-                            disabled={(currentPage + 1) * perPage >= totalCount}
-                            onClick={() => handlePageChange(currentPage + 1)}
-                        >
-                            <i className='fa fa-chevron-right'/>
-                        </button>
-                    </>
-                ) : (
-                    <span>{'0 results'}</span>
-                )}
+                {(() => {
+                    if (totalCount === null) {
+                        return (
+                            <>
+                                <span>{`Page ${currentPage + 1}`}</span>
+                                <button
+                                    disabled={currentPage === 0}
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                >
+                                    <i className='fa fa-chevron-left'/>
+                                </button>
+                                <button
+                                    disabled={groupsMap.size < perPage}
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                >
+                                    <i className='fa fa-chevron-right'/>
+                                </button>
+                            </>
+                        );
+                    }
+                    if (totalCount > 0) {
+                        return (
+                            <>
+                                <span>{`${(currentPage * perPage) + 1} - ${Math.min((currentPage + 1) * perPage, totalCount)} of ${totalCount}`}</span>
+                                <button
+                                    disabled={currentPage === 0}
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                >
+                                    <i className='fa fa-chevron-left'/>
+                                </button>
+                                <button
+                                    disabled={(currentPage + 1) * perPage >= totalCount}
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                >
+                                    <i className='fa fa-chevron-right'/>
+                                </button>
+                            </>
+                        );
+                    }
+                    return <span>{'0 results'}</span>;
+                })()}
             </div>
         </div>
     );

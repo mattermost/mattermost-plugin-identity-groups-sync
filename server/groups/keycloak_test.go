@@ -158,7 +158,46 @@ func TestKeycloakClient_GetGroups(t *testing.T) {
 		assert.Equal(t, client.GetGroupSource(), groups[0].Source)
 	})
 
+	t.Run("successful roles retrieval", func(t *testing.T) {
+		// Test roles mapping type
+		client.MappingType = "roles"
+
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
+
+		mockKVStore.EXPECT().
+			GetKeycloakJWT().
+			Return(validToken, nil)
+
+		name := "Test Role"
+		id := "test-role-id"
+		mockGoCloak.EXPECT().
+			GetRealmRoles(
+				gomock.Any(),
+				"valid-token",
+				"test-realm",
+				gomock.Any(),
+			).
+			Return([]*gocloak.Role{
+				{
+					Name: &name,
+					ID:   &id,
+				},
+			}, nil)
+
+		groups, err := client.GetGroups(context.Background(), groups.Query{Page: 0, PerPage: 100})
+		assert.NoError(t, err)
+		assert.Len(t, groups, 1)
+		assert.Equal(t, name, groups[0].DisplayName)
+		assert.Equal(t, &id, groups[0].RemoteId)
+		assert.Equal(t, client.GetGroupSource(), groups[0].Source)
+	})
+
 	t.Run("token refresh needed", func(t *testing.T) {
+		// Reset to groups mapping type
+		client.MappingType = "groups"
 		expiredToken := &model.JWT{
 			AccessToken:                "expired-token",
 			AccessTokenExpirationTime:  time.Now().Add(-1 * time.Hour).UnixMilli(),
@@ -293,6 +332,40 @@ func TestKeycloakClient_GetGroup(t *testing.T) {
 			}, nil)
 
 		group, err := client.GetGroup(context.Background(), "test-id")
+		assert.NoError(t, err)
+		assert.Equal(t, name, group.DisplayName)
+		assert.Equal(t, &id, group.RemoteId)
+		assert.Equal(t, client.GetGroupSource(), group.Source)
+	})
+
+	t.Run("successful role retrieval", func(t *testing.T) {
+		// Test roles mapping type
+		client.MappingType = "roles"
+
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
+
+		mockKVStore.EXPECT().
+			GetKeycloakJWT().
+			Return(validToken, nil)
+
+		name := "Test Role"
+		id := "test-role-id"
+		mockGoCloak.EXPECT().
+			GetRealmRoleByID(
+				gomock.Any(),
+				"valid-token",
+				"test-realm",
+				"test-role-id",
+			).
+			Return(&gocloak.Role{
+				Name: &name,
+				ID:   &id,
+			}, nil)
+
+		group, err := client.GetGroup(context.Background(), "test-role-id")
 		assert.NoError(t, err)
 		assert.Equal(t, name, group.DisplayName)
 		assert.Equal(t, &id, group.RemoteId)
@@ -599,7 +672,10 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			Return(errors.New("failed to store"))
 
 		// Mock logging
-		api.On("LogError", "Failed to store group mapping", "group", "newgroup", "error", mock.Anything).Return()
+		api.On("LogWarn", "Failed to store group mapping", "group", "newgroup", "error", mock.Anything).Return()
+
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{}, &mmModel.AppError{Message: "not found"})
+		api.On("LogDebug", "Keycloak group hasn't been linked to Mattermost yet", "remote_id", "remote-id-1", "name", "newgroup").Return()
 
 		// Mock GetGroups for existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -720,21 +796,46 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 		api.AssertExpectations(t)
 	})
 
-	t.Run("GetGroupByRemoteID fails", func(t *testing.T) {
+	t.Run("role exists in SAML but not in KVStore (roles mapping)", func(t *testing.T) {
 		// Reset the mock
 		api = &plugintest.API{}
 		client.PluginAPI = pluginapi.NewClient(api, nil)
+		client.MappingType = "roles"
 
-		// Mock GetKeycloakGroupID
+		// Mock GetKeycloakGroupID to return error (not found)
 		mockKVStore.EXPECT().
-			GetKeycloakGroupID("group1").
-			Return("remote-id-1", nil)
+			GetKeycloakGroupID("admin").
+			Return("", errors.New("not found"))
 
-		// Mock GetGroupByRemoteID failure
-		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "group not found"})
+		// Mock GetJWT to return a valid token
+		validToken := &model.JWT{
+			AccessToken:               "valid-token",
+			AccessTokenExpirationTime: time.Now().Add(1 * time.Hour).UnixMilli(),
+		}
 
-		// Mock logging
-		api.On("LogError", "Failed to get Mattermost group", "remote_id", "remote-id-1", "error", mock.Anything).Return()
+		mockKVStore.EXPECT().
+			GetKeycloakJWT().
+			Return(validToken, nil)
+
+		// Mock GetRealmRole success
+		roleID := "role-remote-id-1"
+		roleName := "admin"
+		mockGoCloak.EXPECT().
+			GetRealmRole(gomock.Any(), "valid-token", "test-realm", "admin").
+			Return(&gocloak.Role{
+				ID:   &roleID,
+				Name: &roleName,
+			}, nil)
+
+		// Mock StoreGroupID success
+		mockKVStore.EXPECT().
+			StoreKeycloakGroupID("admin", "role-remote-id-1").
+			Return(nil)
+
+		// Mock GetGroupByRemoteID
+		api.On("GetGroupByRemoteID", "role-remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-group-1",
+		}, nil)
 
 		// Mock GetGroups for existing memberships
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
@@ -742,6 +843,157 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 			FilterHasMember: "user1",
 			IncludeArchived: true,
 		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{}, nil)
+
+		// Mock group membership operations
+		api.On("UpsertGroupMember", "mm-group-1", "user1").Return(nil, nil)
+
+		// Mock GetGroupSyncables
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{}, nil)
+		api.On("GetGroupSyncables", "mm-group-1", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{}, nil)
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "roles",
+								Values: []saml2Types.AttributeValue{
+									{Value: "admin"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "roles")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("mixed role scenario with additions and removals (roles mapping)", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+		client.MappingType = "roles"
+
+		// Mock GetKeycloakGroupID calls for roles in SAML assertion
+		mockKVStore.EXPECT().
+			GetKeycloakGroupID("admin").
+			Return("role-admin-id", nil)
+		mockKVStore.EXPECT().
+			GetKeycloakGroupID("developer").
+			Return("role-developer-id", nil)
+
+		// Mock GetGroupByRemoteID for roles in SAML assertion
+		api.On("GetGroupByRemoteID", "role-admin-id", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-admin-group",
+		}, nil)
+		api.On("GetGroupByRemoteID", "role-developer-id", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
+			Id: "mm-developer-group",
+		}, nil)
+
+		// Mock GetGroups for existing memberships (user currently has "manager" and "admin" roles)
+		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
+			Source:          mmModel.GroupSourcePluginPrefix + "keycloak",
+			FilterHasMember: "user1",
+			IncludeArchived: true,
+		}, (*mmModel.ViewUsersRestrictions)(nil)).Return([]*mmModel.Group{
+			{Id: "mm-manager-group", DisplayName: "Manager"},
+			{Id: "mm-admin-group", DisplayName: "Admin"},
+		}, nil)
+
+		// Mock syncables for group being removed (manager)
+		api.On("GetGroupSyncables", "mm-manager-group", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-manager-group", SyncableId: "team1", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "mm-manager-group", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-manager-group", SyncableId: "channel1", AutoAdd: true},
+		}, nil)
+
+		// Mock syncables for group being retained (admin)
+		api.On("GetGroupSyncables", "mm-admin-group", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-admin-group", SyncableId: "team2", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "mm-admin-group", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-admin-group", SyncableId: "channel2", AutoAdd: true},
+		}, nil)
+
+		// Mock team operations for removal
+		api.On("GetTeam", "team1").Return(&mmModel.Team{Id: "team1", GroupConstrained: mmModel.NewPointer(true)}, nil)
+		api.On("GetTeamMember", "team1", "user1").Return(&mmModel.TeamMember{TeamId: "team1", DeleteAt: 0}, nil)
+		api.On("DeleteTeamMember", "team1", "user1", "").Return(nil)
+		api.On("LogDebug", "Removing user from team", "team_id", "team1", "user_id", "user1").Return()
+
+		// Mock channel operations for removal
+		api.On("GetChannelMember", "channel1", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel1"}, nil)
+		api.On("DeleteChannelMember", "channel1", "user1").Return(nil)
+		api.On("LogDebug", "Removing user from channel", "channel_id", "channel1", "user_id", "user1").Return()
+
+		// Mock group removal
+		api.On("DeleteGroupMember", "mm-manager-group", "user1").Return(nil, nil)
+
+		// Mock group addition for new role (developer)
+		api.On("UpsertGroupMember", "mm-developer-group", "user1").Return(nil, nil)
+
+		// Mock syncables for new group (developer)
+		api.On("GetGroupSyncables", "mm-developer-group", mmModel.GroupSyncableTypeTeam).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-developer-group", SyncableId: "team3", AutoAdd: true},
+		}, nil)
+		api.On("GetGroupSyncables", "mm-developer-group", mmModel.GroupSyncableTypeChannel).Return([]*mmModel.GroupSyncable{
+			{GroupId: "mm-developer-group", SyncableId: "channel3", AutoAdd: true},
+		}, nil)
+
+		// Mock team operations for addition
+		api.On("GetTeamMember", "team2", "user1").Return(&mmModel.TeamMember{TeamId: "team2", DeleteAt: 0}, nil) // Already member
+		api.On("GetTeamMember", "team3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("CreateTeamMember", "team3", "user1").Return(&mmModel.TeamMember{}, nil)
+		api.On("LogDebug", "Adding user to team", "team_id", "team3", "user_id", "user1").Return()
+
+		// Mock channel operations for addition
+		api.On("GetChannelMember", "channel2", "user1").Return(&mmModel.ChannelMember{ChannelId: "channel2"}, nil) // Already member
+		api.On("GetChannelMember", "channel3", "user1").Return(nil, &mmModel.AppError{Message: "not found"})
+		api.On("AddChannelMember", "channel3", "user1").Return(&mmModel.ChannelMember{}, nil)
+		api.On("LogDebug", "Adding user to channel", "channel_id", "channel3", "user_id", "user1").Return()
+
+		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
+			Assertions: []saml2Types.Assertion{
+				{
+					AttributeStatement: &saml2Types.AttributeStatement{
+						Attributes: []saml2Types.Attribute{
+							{
+								Name: "roles",
+								Values: []saml2Types.AttributeValue{
+									{Value: "admin"},     // Keep this role
+									{Value: "developer"}, // Add this role
+									// "manager" role removed (was in existing memberships)
+								},
+							},
+						},
+					},
+				},
+			},
+		}, "roles")
+		assert.NoError(t, err)
+		api.AssertExpectations(t)
+	})
+
+	t.Run("GetGroupByRemoteID fails with a timeout", func(t *testing.T) {
+		// Reset the mock
+		api = &plugintest.API{}
+		client.PluginAPI = pluginapi.NewClient(api, nil)
+		client.MappingType = "groups" // Reset to groups
+
+		// Mock GetKeycloakGroupID
+		mockKVStore.EXPECT().
+			GetKeycloakGroupID("group1").
+			Return("remote-id-1", nil)
+
+		// Mock GetGroupByRemoteID failure
+		api.On("GetGroupByRemoteID", "remote-id-1", mmModel.GroupSourcePluginPrefix+"keycloak").Return(nil, &mmModel.AppError{Message: "failed to get groups", StatusCode: 504})
+
+		// Mock logging
+		api.On("LogError", "Failed to get Mattermost group by remote ID", "remote_id", "remote-id-1", "name", "group1", "error", mock.Anything).Return()
 
 		err := client.HandleSAMLLogin(nil, &mmModel.User{Id: "user1"}, &saml2.AssertionInfo{
 			Assertions: []saml2Types.Assertion{
@@ -759,7 +1011,9 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 				},
 			},
 		}, "groups")
-		assert.NoError(t, err)
+
+		// GetGroupByRemoteID returns an error if it fails with anything other than "not found"
+		assert.Error(t, err)
 		api.AssertExpectations(t)
 	})
 
@@ -986,9 +1240,13 @@ func TestKeycloakClient_HandleSAMLLogin(t *testing.T) {
 
 		// Mock GetGroupByRemoteID to return a deleted group (DeleteAt > 0)
 		api.On("GetGroupByRemoteID", "remote-id-deleted", mmModel.GroupSourcePluginPrefix+"keycloak").Return(&mmModel.Group{
-			Id:       "deleted-group-id",
-			DeleteAt: 12345, // Non-zero DeleteAt indicates the group is deleted
+			Id:          "deleted-group-id",
+			RemoteId:    mmModel.NewPointer("remote-id-deleted"),
+			DeleteAt:    12345, // Non-zero DeleteAt indicates the group is deleted
+			DisplayName: "deletedgroup",
 		}, nil)
+
+		api.On("LogDebug", "Keycloak group has been unlinked in Mattermost", "remote_id", "remote-id-deleted", "name", "deletedgroup").Return()
 
 		// Mock GetGroups for existing memberships - user is already a member of the deleted group
 		api.On("GetGroups", 0, 100, mmModel.GroupSearchOpts{
