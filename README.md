@@ -19,7 +19,7 @@ If you're running an Enterprise Edition of Mattermost and don't already have a v
 
 ## Requirements
 
-- Mattermost Server v10.7 or higher.
+- Mattermost Server v10.9 or higher.
 - A valid Mattermost Enterprise Edition license.
 
 ## Development guide
